@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 0001 — Your First Autonomous Run</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+<main>
+
+<header class="lesson-header">
+  <p class="lesson-number">Lesson 0001</p>
+  <h1>Your First Autonomous Run</h1>
+  <p class="lesson-subtitle">Stand up a sandboxed agent that makes a real commit while you do nothing.</p>
+</header>
+
+<div class="callout key-idea">
+<span class="tag">Why this matters</span>
+<p>Your mission is a repo that runs without human intervention. Sandcastle's whole job is to let you fire off an agent, walk away, and come back to commits on a branch. This lesson gets that first loop running end-to-end on your machine.</p>
+</div>
+
+<h2>The mental model</h2>
+<p>Sandcastle is an <em>orchestrator</em>, not an agent. You write a small TypeScript script; Sandcastle then:</p>
+<ol>
+  <li>Creates a <strong>git worktree</strong> on a branch (per your <em>branch strategy</em>),</li>
+  <li>Spins up a <strong>sandbox</strong> around it (a container via Docker/Podman, a microVM on Vercel, or nothing),</li>
+  <li>Invokes a coding <strong>agent</strong> inside it with your prompt,</li>
+  <li>Collects the commits it makes and merges them back per the branch strategy.</li>
+</ol>
+<p>You don't talk to the model at all — you talk to <code>run()</code>. <a href="https://github.com/mattpocock/sandcastle#how-it-works">(README: How it works)</a></p>
+
+<p>Two decisions drive everything else:</p>
+<ol>
+  <li><strong>Whose brain</strong> — the <em>agent provider</em> (<code>claudeCode()</code>, <code>opencode()</code>, <code>codex()</code>, <code>pi()</code>…).</li>
+  <li><strong>Where it lives</strong> — the <em>sandbox provider</em> (<code>docker()</code>, <code>podman()</code>, <code>vercel()</code>, <code>noSandbox()</code>).</li>
+</ol>
+<p>See our <a href="../reference/sandbox-providers.html">reference: providers &amp; branch strategies</a>.</p>
+
+<div class="callout good">
+<span class="tag">The unlock for you</span>
+<p><code>opencode()</code> is a first-class built-in agent provider — so you can run a fully autonomous agent <strong>without a Claude Code token</strong>. That removes the main setup blocker on your machine. (The trade-off: session-resume / structured-output <em>retries</em> currently need <code>claudeCode</code>, <code>codex</code>, or <code>pi</code>. <a href="https://github.com/mattpocock/sandcastle#structured-output">(README: retries)</a>)</p>
+</div>
+
+<h2>Stand it up</h2>
+<p>Pick a scratch repo — ideally a tiny one you own with a couple of issues or a README, so the agent has something to do. Then:</p>
+
+<ol class="steps">
+<li>
+<strong>Install the package.</strong>
+<pre><code>npm install --save-dev @ai-hero/sandcastle</code></pre>
+</li>
+<li>
+<strong>Scaffold the sandcastle directory.</strong>
+<pre><code>npx @ai-hero/sandcastle init</code></pre>
+<p>Choose <code>docker</code> as the sandbox (Docker Desktop is your provider), <code>opencode</code> when it asks for the agent, and the <code>blank</code> template. It creates <code>.sandcastle/</code> containing a <code>Dockerfile</code>, <code>prompt.md</code>, <code>.env.example</code> and <code>.gitignore</code>, then builds the container image. <a href="https://github.com/mattpocock/sandcastle#cli-commands">(README: CLI commands)</a></p>
+</li>
+<li>
+<strong>Configure the token.</strong> Copy the env file and fill it in — for <code>opencode</code> you don't need an Anthropic key hitched to Sandcastle itself, but if you later switch to <code>claudeCode()</code> you'll want your token here:
+<pre><code>cp .sandcastle/.env.example .sandcastle/.env</code></pre>
+</li>
+<li>
+<strong>Run your first agent.</strong> The scaffold generates <code>main.ts</code> (or <code>main.mts</code>) with a ready-made <code>run()</code>. Run it:
+<pre><code>npx tsx .sandcastle/main.ts</code></pre>
+<p>Watch it spin up the container, read your prompt, and start working. When it finishes, your repo has commits — made entirely by the agent.</p>
+</li>
+</ol>
+
+<div class="callout note">
+<span class="tag">Troubleshooting</span>
+<p>If a run fails, Sandcastle writes logs under <code>.sandcastle/logs/</code> (with <code>logging: { type: "file" }</code>, the default). Read the log file — that's where the actual error lives.</p>
+</div>
+
+<h2>Anatomy of a <code>run()</code></h2>
+<p>This is the one-shot call — sandbox lifecycle handled for you:</p>
+
+<pre><code><span class="key">import</span> { run, claudeCode } from <span class="str">"@ai-hero/sandcastle"</span>;
+<span class="key">import</span> { docker } from <span class="str">"@ai-hero/sandcastle/sandboxes/docker"</span>;
+
+<span class="key">const</span> result = <span class="key">await</span> run({
+  agent: claudeCode(<span class="str">"claude-opus-4-8"</span>), <span class="cmt">// whose brain (swap in opencode("opencode/big-pickle"))</span>
+  sandbox: docker(),                       <span class="cmt">// where it lives</span>
+  promptFile: <span class="str">".sandcastle/prompt.md"</span>,   <span class="cmt">// what it works on</span>
+  maxIterations: 5,                        <span class="cmt">// how many passes before giving up</span>
+});
+
+console.log(result.iterations.length); <span class="cmt">// how many iterations ran</span>
+console.log(result.commits);           <span class="cmt">// [{ sha }] — the work it made</span>
+console.log(result.branch);            <span class="cmt">// what landed where</span></code></pre>
+
+<p>Three things to notice for your mission:</p>
+<ul>
+<li><strong>It's AFK by design.</strong> <code>run()</code> is the autonomous path — no TTY <em>required</em>. (<code>interactive()</code> is the human-in-the-loop sibling.)</li>
+<li><strong>The prompt is a file you own.</strong> Sandcastle imposes no workflow opinion; your <code>prompt.md</code> is pure instructions. <a href="https://github.com/mattpocock/sandcastle#prompt-resolution">(README: prompts)</a></li>
+<li><strong>Default branch strategy for <code>docker()</code> is <code>head</code></strong> — the agent writes straight into the host directory. Use <code>branchStrategy: { type: "branch", branch: "agent/..." }</code> to keep work off the main line. (That's the safe setting you'll use for real projects — lesson 0002.)</li>
+</ul>
+
+<h2>Check yourself</h2>
+<div class="quiz">
+
+<div class="quiz-question" data-why-right="A named branch in a worktree — that's the branch strategy for parallel agents and PR-style work."
+ data-why-wrong="Think about where the worktree lives. The strategy creates a named worktree branch and reuses it on re-run (ADR 0003).">
+  <p class="q">With <code>branchStrategy: { type: "branch", branch: "foo" }</code>, where do the agent's commits land?</p>
+  <button class="opt" data-correct="true">On branch foo, then merged back</button>
+  <button class="opt">Directly on host, no branch created</button>
+  <button class="opt">On a temp branch then deleted</button>
+  <button class="opt">Inside the container, never on git</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-question" data-why-right="Bind-mount means the worktree directory is mounted into the container — the agent's writes are your directory's writes. No sync step (README)."
+ data-why-wrong="Think about the word 'bind-mount': the launch directory is shared between host and container.">
+  <p class="q">For <code>docker()</code> bind-mount, how does agent output reach your disk?</p>
+  <button class="opt" data-correct="true">Written straight through the mounted path</button>
+  <button class="opt">Transferred after the container shuts down</button>
+  <button class="opt">Copied by post-run sync of the worktree</button>
+  <button class="opt">Sent to origin then pulled back again</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-question" data-why-right="The completion signal stops the iteration loop early; commits already made are kept. The signal is a convention you put in your prompt — the engine never injects it."
+ data-why-wrong="The signal only ends the loop. Sandcastle does not delete work, merge branches, or pause for a human.">
+  <p class="q">What does an agent emitting <code>&lt;promise&gt;COMPLETE&lt;/promise&gt;</code> cause?</p>
+  <button class="opt" data-correct="true">Stops iteration loop, keeps work committed</button>
+  <button class="opt">Deletes all work, starts the run again</button>
+  <button class="opt">Forces a merge back onto the host head</button>
+  <button class="opt">Pauses the run until a human resumes it</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+</div>
+
+<h2>Do it now</h2>
+<ol>
+  <li>Scaffold Sandcastle in a <strong>scratch repo</strong> (init → docker + opencode + blank).</li>
+  <li>Edit <code>.sandcastle/prompt.md</code> to a real task — e.g. fix something small, and end it with a line telling the agent to print <code>&lt;promise&gt;COMPLETE&lt;/promise&gt;</code> when done.</li>
+  <li>Run <code>npx tsx .sandcastle/main.ts</code> and don't touch it.</li>
+  <li>Afterwards, run <code>git log --oneline</code> and <code>git status</code> — inspect what the agent did.</li>
+  <li>Check <code>.sandcastle/logs/</code> to see how the run described itself.</li>
+</ol>
+
+<div class="callout key-idea">
+<span class="tag">Then what?</span>
+<p>Next lesson we switch your scratch run to the safe workflow: <code>branchStrategy: { type: "branch" }</code> so agents never dirty the main line, and a second agent that reviews the first one's work. That's the nucleus of your autonomous pipeline.</p>
+</div>
+
+<section class="primary-source">
+<h2>Primary source</h2>
+<p>Read the top of the README end-to-end before next time — <a href="https://github.com/mattpocock/sandcastle">github.com/mattpocock/sandcastle</a> — particularly <em>How it works</em>, <em>Prompts</em>, and the <em>run()</em> options list. Everything in this lesson is compressed from it.</p>
+</section>
+
+<footer class="lesson-footer">
+  <p><strong>Stuck? Ask your teacher.</strong> If a step errors, paste the log line from <code>.sandcastle/logs/</code> and I'll unpick it with you before you move on.</p>
+  <p>Next: <em>Lesson 0002 — Branch strategies: working without dirtying the main line</em> · Reference: <a href="../reference/sandbox-providers.html">providers &amp; branch strategies</a></p>
+</footer>
+
+</main>
+</body>
+</html>

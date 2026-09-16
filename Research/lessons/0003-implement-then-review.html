@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 0003 — The Implement-then-Review Loop</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+<main>
+
+<header class="lesson-header">
+  <p class="lesson-number">Lesson 0003</p>
+  <h1>The Implement-then-Review Loop</h1>
+  <p class="lesson-subtitle">Two agents, one branch, one container — gated by real test output.</p>
+</header>
+
+<h2>Recall before reading</h2>
+<p>From lessons 0001–0002, answer without looking: what does <code>branchStrategy: { type: "branch" }</code> do, and why is it safer than <code>head</code> for repeated runs?</p>
+
+<div class="callout key-idea">
+<span class="tag">Why this matters</span>
+<p>A single <code>run()</code> gives you an AFK agent. Two sequential <code>run()</code> calls give you an implementer and a reviewer — but each spins up and tears down its own container. <code>createSandbox()</code> gives you one warm container that survives across both, so the reviewer sees the exact state the implementer left behind, with dependencies already installed.</p>
+</div>
+
+<h2>The lifecycle</h2>
+<p><code>createSandbox()</code> creates a container + worktree pair. You own it until you close it — either explicitly or implicitly via <code>await using</code>:</p>
+
+<pre><code><span class="key">await using</span> sandbox = <span class="key">await</span> createSandbox({
+  branch: <span class="str">"agent/fix-42"</span>,
+  sandbox: docker(),
+  hooks: {
+    sandbox: {
+      onSandboxReady: [{ command: <span class="str">"npm install"</span>, timeoutMs: 300_000 }],
+    },
+  },
+});</code></pre>
+
+<p>When the <code>await using</code> block exits — whether normally or via an exception — <code>sandbox.close()</code> fires automatically. If the worktree is dirty (uncommitted changes), it's <strong>preserved on disk</strong>; if clean, both container and worktree are removed. <a href="https://github.com/mattpocock/sandcastle#automatic-cleanup-with-await-using">(README: cleanup)</a></p>
+
+<h2>Where hooks fire</h2>
+<p>Hooks are grouped by where they run — host or sandbox. The ordering is strict:</p>
+<pre><code>copyToWorktree
+  → host.onWorktreeReady   <span class="cmt">// sequential, runs on your machine</span>
+  → [sandbox created]
+  → host.onSandboxReady    <span class="cmt">// parallel with sandbox hooks, runs on your machine</span>
+  → sandbox.onSandboxReady <span class="cmt">// parallel with host hooks, runs INSIDE the container</span></code></pre>
+
+<table>
+<thead>
+<tr><th>Hook</th><th>Runs on</th><th>When</th></tr>
+</thead>
+<tbody>
+<tr><td><code>host.onWorktreeReady</code></td><td>Host</td><td>After worktree copy, before container starts. Use for host-side file prep (e.g. <code>cp .env.example .env</code>).</td></tr>
+<tr><td><code>host.onSandboxReady</code></td><td>Host</td><td>After container is up. Use for host-side verification you don't want inside the container.</td></tr>
+<tr><td><code>sandbox.onSandboxReady</code></td><td>Sandbox</td><td>After container is up. Use for dependency installs, database seeds — anything that needs to see the repo inside the container.</td></tr>
+</tbody>
+</table>
+<p>If any hook exits non-zero, setup fails fast. Host hooks accept <code>{ command, timeoutMs? }</code>. Sandbox hooks also accept <code>{ command, sudo?, timeoutMs? }</code> for elevated installs. <a href="https://github.com/mattpocock/sandcastle#hooks">(README: hooks)</a></p>
+
+<div class="callout note">
+<span class="tag">Two hooks, both "ready"</span>
+<p><code>host.onSandboxReady</code> and <code>sandbox.onSandboxReady</code> fire at the <strong>same moment</strong> — one on the host, one inside the container. Use the sandbox variant when the command needs the container's repo state; use the host variant when it needs the host's file system.</p>
+</div>
+
+<h2>The full pipeline</h2>
+<p>Three steps: implement → gate on tests → review. All in one sandbox, one branch, one <code>await using</code> block:</p>
+
+<pre><code><span class="key">import</span> { createSandbox, opencode } from <span class="str">"@ai-hero/sandcastle"</span>;
+<span class="key">import</span> { docker } from <span class="str">"@ai-hero/sandcastle/sandboxes/docker"</span>;
+
+<span class="key">await using</span> sandbox = <span class="key">await</span> createSandbox({
+  branch: <span class="str">"agent/fix-42"</span>,
+  sandbox: docker(),
+  hooks: {
+    sandbox: {
+      onSandboxReady: [{ command: <span class="str">"npm install"</span>, timeoutMs: 300_000 }],
+    },
+  },
+});
+
+<span class="cmt">// Step 1 — implement</span>
+<span class="key">const</span> impl = <span class="key">await</span> sandbox.run({
+  agent: opencode(<span class="str">"opencode/big-pickle"</span>),
+  promptFile: <span class="str">".sandcastle/implement.md"</span>,
+  maxIterations: 5,
+});
+
+<span class="cmt">// Step 2 — gate: run tests, abort review if they fail</span>
+<span class="key">const</span> tests = <span class="key">await</span> sandbox.exec(<span class="str">"npm test"</span>);
+<span class="key">if</span> (tests.exitCode !== <span class="str">0</span>) {
+  <span class="key">throw new</span> Error(<span class="str">`Tests failed:\n${tests.stdout}\n${tests.stderr}`</span>);
+}
+
+<span class="cmt">// Step 3 — review (same branch, same warm container)</span>
+<span class="key">const</span> review = <span class="key">await</span> sandbox.run({
+  agent: opencode(<span class="str">"opencode/big-pickle"</span>),
+  prompt: <span class="str">"Review the changes on this branch. Fix any issues you find."</span>,
+});
+
+<span class="cmt">// Cleanup is automatic — await using calls sandbox.close()</span></code></pre>
+
+<p>Three things to notice:</p>
+<ol>
+<li><strong><code>sandbox.exec()</code> returns exitCode — it does not throw.</strong> You decide whether a non-zero exit is fatal. This makes it easy to gate on results without try/catch noise. <a href="https://github.com/mattpocock/sandcastle#sandbox--createsandbox--reusable-sandbox">(README)</a></li>
+<li><strong>The container stays alive.</strong> <code>npm install</code> only runs once (in <code>onSandboxReady</code>). The review step sees the exact installed deps and build artifacts from the implement step.</li>
+<li><strong>Commits accumulate on the same branch.</strong> Both <code>sandbox.run()</code> calls write to <code>agent/fix-42</code>. When the block exits, the branch has a clean history of implement + review commits.</li>
+</ol>
+
+<h2>Check yourself</h2>
+<div class="quiz">
+
+<div class="quiz-question" data-why-right="One shared container survives between all agent runs — deps stay installed, builds persist, reviewer sees exact implementer state."
+ data-why-wrong="Think about what 'reusable' means for the container lifecycle between sandbox.run() calls.">
+  <p class="q">What advantage does <code>createSandbox()</code> give over two separate <code>run()</code> calls?</p>
+  <button class="opt" data-correct="true">One shared container survives between all agent runs</button>
+  <button class="opt">Each agent gets its own fresh sandbox</button>
+  <button class="opt">Runs are automatically merged back into HEAD</button>
+  <button class="opt">Container starts up fresh for each agent invocation</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-question" data-why-right="sandbox.exec() returns the exitCode — you decide whether a non-zero exit is fatal. No exception, no abort."
+ data-why-wrong="sandbox.exec() is a passive observer: it runs the command, reports results, and lets you decide what happens next.">
+  <p class="q"><code>sandbox.exec("npm test")</code> — what happens if tests fail?</p>
+  <button class="opt" data-correct="true">Returns exitCode non-zero, does not throw an error</button>
+  <button class="opt">Throws an exception and aborts the entire sandbox</button>
+  <button class="opt">Halts the implement step and preserves the sandbox</button>
+  <button class="opt">Silently succeeds because the error is non-fatal</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-question" data-why-right="sandbox.onSandboxReady fires inside the container after it starts — that's why its commands see the repo state (dependencies, installed deps, etc.)."
+ data-why-wrong="host.onWorktreeReady fires before the sandbox starts. sandbox.onSandboxReady fires after. Don't mix up the timing or the machine.">
+  <p class="q">Where does <code>sandbox.onSandboxReady</code> execute?</p>
+  <button class="opt" data-correct="true">Inside the container, after it finishes starting</button>
+  <button class="opt">On the host machine, before sandbox creation starts</button>
+  <button class="opt">After copyToWorktree, before the sandbox starts</button>
+  <button class="opt">During each sandbox.run() call, between agent runs</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+</div>
+
+<h2>Do it now</h2>
+<ol>
+  <li>Create <code>.sandcastle/implement.md</code> — write a prompt telling the agent to fix a small issue, and end with <code>&lt;promise&gt;COMPLETE&lt;/promise&gt;</code>.</li>
+  <li>Replace the <code>run()</code> call in <code>main.ts</code> with the full <code>createSandbox()</code> pipeline above.</li>
+  <li>If your repo has tests, run it and watch the gate — the review should only start if <code>npm test</code> passes. If it doesn't, look at the thrown error and check <code>.sandcastle/logs/</code>.</li>
+  <li>After the run, inspect: <code>git log agent/fix-42 --oneline</code>. You should see both implement and review commits on the same branch.</li>
+  <li>Check <code>git status</code> — the worktree should be clean (auto-removed) or preserved if there were uncommitted changes.</li>
+</ol>
+
+<div class="callout key-idea">
+<span class="tag">Then what?</span>
+<p>You now have the autonomous factory core: implement → gate → review. Next we make it dynamic: <code>promptFile</code> with <code>!`command`</code> expressions that pull live context (open issues, recent commits) into the prompt at runtime, and <code>promptArgs</code> for reuse across different issues. That turns a single hardcoded run into a real issue-driven pipeline.</p>
+</div>
+
+<section class="primary-source">
+<h2>Primary source</h2>
+<p>Read the <a href="https://github.com/mattpocock/sandcastle#createsandbox--reusable-sandbox"><code>createSandbox()</code> section</a> and the <a href="https://github.com/mattpocock/sandcastle#hooks">hooks documentation</a> in the README. Every lifecycle detail in this lesson is compressed from those two sections.</p>
+</section>
+
+<footer class="lesson-footer">
+  <p><strong>Stuck? Ask your teacher.</strong> If the implement step runs but the gate blocks review, paste your <code>npm test</code> output and I'll help you wire the gate correctly.</p>
+  <p>Previous: <a href="0002-branch-strategies.html">Lesson 0002 — branch strategies</a> · Reference: <a href="../reference/sandbox-providers.html">providers &amp; branch strategies</a></p>
+</footer>
+
+</main>
+</body>
+</html>

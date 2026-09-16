@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reference — Sandbox Providers &amp; Branch Strategies</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<header class="lesson-header">
+  <p class="lesson-number">Reference</p>
+  <h1>Sandbox Providers &amp; Branch Strategies</h1>
+  <p class="lesson-subtitle">The two knobs that decide <em>where</em> the agent lives and <em>how its work reaches git</em>.</p>
+</header>
+
+<h2>Sandbox providers</h2>
+<p>Every <code>run()</code> / <code>interactive()</code> / <code>createSandbox()</code> call takes exactly one <code>sandbox</code>. Providers come from subpath imports.</p>
+
+<table>
+<thead>
+<tr><th>Provider</th><th>Import path</th><th>Isolation</th><th>Use it when</th></tr>
+</thead>
+<tbody>
+<tr><td><code>docker()</code></td><td><code>@ai-hero/sandcastle/sandboxes/docker</code></td><td>Bind-mount</td><td>Local dev default; worktree dir is mounted into the container, writes land directly on the host FS</td></tr>
+<tr><td><code>podman()</code></td><td><code>@ai-hero/sandcastle/sandboxes/podman</code></td><td>Bind-mount</td><td>Rootless containers on Linux without Docker Desktop</td></tr>
+<tr><td><code>vercel()</code></td><td><code>@ai-hero/sandcastle/sandboxes/vercel</code></td><td>Isolated (microVM)</td><td>Cloud runs, no local Docker; the repo is copied in, output synced back</td></tr>
+<tr><td><code>noSandbox()</code></td><td><code>@ai-hero/sandcastle/sandboxes/no-sandbox</code></td><td>None</td><td>Agent runs directly on the host; <code>wt.interactive()</code> defaults to this</td></tr>
+</tbody>
+</table>
+
+<h3>Docker options you'll actually use</h3>
+<pre><code><span class="key">docker</span>({
+  imageName: <span class="str">"sandcastle:local"</span>,              // built by `sandcastle init`
+  mounts: [
+    { hostPath: <span class="str">"~/.npm"</span>, sandboxPath: <span class="str">"/home/agent/.npm"</span>, readonly: <span class="str">true</span> }, // cache reuse
+  ],
+  env: { DOCKER_SPECIFIC: <span class="str">"value"</span> },   // merged at launch
+  network: <span class="str">"my-network"</span>,               // string or string[]
+  groups: [<span class="str">"docker"</span>, 999],              // --group-add (e.g. a bind-mounted socket)
+  cpus: 2,                             // --cpus limit
+})</code></pre>
+
+<h2>Branch strategies</h2>
+<p>Control how the agent's commits relate to branches. Bind-mount providers default to <code>head</code>; isolated providers default to <code>merge-to-head</code>.</p>
+
+<table>
+<thead>
+<tr><th>Strategy</th><th>What happens</th><th>Best for</th></tr>
+</thead>
+<tbody>
+<tr><td><code>{ type: "head" }</code></td><td>Agent writes straight into the host working directory. No worktree, no branch.</td><td>One-shot exploration on a scratch repo</td></tr>
+<tr><td><code>{ type: "merge-to-head" }</code></td><td>Temp branch in a git worktree; agent works there; merged back to HEAD at the end; temp branch deleted.</td><td>Safe default for host repos you don't want polluted</td></tr>
+<tr><td><code>{ type: "branch", branch: "foo" }</code></td><td>Worktree on a real named branch; commits land on <code>foo</code>. Re-running with the same name reuses and fast-forwards the worktree (ADR 0003).</td><td>Parallel agents, PR-style workflows, review pipelines</td></tr>
+</tbody>
+</table>
+
+<div class="callout key-idea">
+<span class="tag">Mental model</span>
+<p>For bind-mount providers the worktree directory is mounted into the container, so the agent writes straight to your disk through the mount — no sync step. For isolated providers (Vercel), the repo is copied into the sandbox and changes are synced back.</p>
+</div>
+
+<h2>One-liners</h2>
+<pre><code><span class="key">import</span> { run, claudeCode } from <span class="str">"@ai-hero/sandcastle"</span>;
+<span class="key">import</span> { docker } from <span class="str">"@ai-hero/sandcastle/sandboxes/docker"</span>;
+
+<span class="key">await</span> run({
+  agent: claudeCode(<span class="str">"claude-opus-4-8"</span>),
+  sandbox: docker(),
+  promptFile: <span class="str">".sandcastle/prompt.md"</span>,
+});</code></pre>
+
+<p><em>Primary source: <a href="https://github.com/mattpocock/sandcastle#sandbox-providers">Sandcastle README — Providers</a> and <a href="https://github.com/mattpocock/sandcastle/blob/main/docs/adr/0003-reuse-worktree-by-default.md">ADR 0003</a>.</em></p>
+
+<footer class="lesson-footer">
+  <p>Part of the <em>Sandcastle</em> course. Ask your teacher anything you don't understand.</p>
+</footer>
+</main>
+</body>
+</html>

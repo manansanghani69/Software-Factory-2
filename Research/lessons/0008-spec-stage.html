@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 0008 — The Spec Stage: Thinking Before Acting</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+<main>
+
+<header class="lesson-header">
+  <p class="lesson-number">Lesson 0008 · Capstone follow-up</p>
+  <h1>The Spec Stage: Thinking Before Acting</h1>
+  <p class="lesson-subtitle">Upstream of Sandcastle — where your pipeline decides <em>what</em> and <em>in what order</em> before it runs.</p>
+</header>
+
+<h2>Recall before reading</h2>
+<p>From lesson 0007: what does the plan step emit, and what does the orchestrator do with it? Now consider — if two issues both edit <code>lib/factory.ts</code>, what happens if they run in parallel?</p>
+
+<div class="callout key-idea">
+<span class="tag">Why this matters</span>
+<p>Sandcastle is a flawless pair of hands and a terrible brain. It will fan out every open issue in parallel — <em>including issues that depend on each other</em> — and then let you discover the merge conflicts. If your factory is to run fully autonomous, the <em>thinking</em> must happen before execution: write a spec per issue, name its dependencies, and let Sandcastle only do what it's good at.</p>
+</div>
+
+<h2>The honest constraint</h2>
+<p>Sandcastle has <strong>zero awareness of issue dependencies</strong>. It doesn't read the repo's graph, it doesn't know that fixing a parser must land before a formatter. Parallelism safety is decided by <em>you</em> (or your planner agent): two issues may run concurrently only if they touch no shared files <em>and</em> have no transitive dependency on each other.</p>
+
+<p>Everything good about running agents — the branch strategy reusing and fast-forwarding worktrees, <code>Promise.all</code>, structured output — is machinery. The dependency map is meaning. Sandcastle gives you all the machinery; the planner supplies the meaning.</p>
+
+<h2>The spec stage in three jobs</h2>
+<ol class="steps">
+<li><strong>Specify</strong> — a planner agent reads the open issues and emits, for each, a <em>checkable</em> spec: scope, files touched, acceptance criteria, dependencies. One-shot run + <code>Output.object()</code> (lesson 0006), so the spec's shape is schema-validated before anything else happens.</li>
+<li><strong>Schedule</strong> — your code turns the spec into <em>waves</em>: topological layers. Wave members must be mutually independent. The machine does the ordering — not the LLM — because it's deterministic and testable.</li>
+<li><strong>Execute</strong> — each wave runs the parallel implement → gate → review loop from lesson 0007, then merges. The next wave's branches start from the newly merged HEAD, so dependents see their dependencies' work.</li>
+</ol>
+
+<div class="callout note">
+<span class="tag">The divider of labor</span>
+<p>LLMs reason about <em>intent</em>: "this issue rewrites the auth module, and that one depends on the new token shape." Machines reason about <em>order</em>: "run wave 1, wait, run wave 2." Split the work there. If the planner emits an ordering and lets it become a lie (stale branch, missed dependency), the machine can't catch it — so make the planner emit <em>evidence</em> (files, dependencies), and let your code compute the waves from that evidence.</p>
+</div>
+
+<h2>The plan prompt — emit evidence, not orders</h2>
+
+<pre><code><span class="cmt"># .sandcastle/plan.md — the spec stage (single-iteration, structured output)</span>
+Analyze the open issues and produce a dependency-aware spec.
+
+#\`gh issue list --state open --json number,title,body,labels --limit 30\`
+
+#\`git log --oneline -10\`
+
+Emit JSON inside &lt;plan&gt; tags, shape:
+
+{ "issues": [
+  { "number": string,
+    "scope": string,
+    "files": [string],
+    "dependencies": [string],
+    "acceptance": [string]
+  } ] }
+
+- <span class="str">files</span>: every file the fix will touch, best effort.
+- <span class="str">dependencies</span>: issue numbers that must land before this one.
+- <span class="str">parallelizable</span> — do NOT include it; the orchestrator computes waves
+  from files and dependencies. Your job is evidence, not scheduling.
+When done, print &lt;promise&gt;COMPLETE&lt;/promise&gt;.</code></pre>
+
+<h2>The scheduler — waves in your code</h2>
+<p>Your orchestration turns the validated spec into execution waves:</p>
+
+<pre><code><span class="key">const</span> wavesOf = (issues) =&gt; {
+  <span class="key">const</span> completed = <span class="key">new</span> Set();
+  <span class="key">const</span> waves = [];
+  <span class="key">let</span> pending = issues.map(i =&gt; i.number);
+
+  <span class="key">while</span> (pending.length) {
+    <span class="key">const</span> ready = issues.filter(i =&gt;
+      pending.includes(i.number) &amp;&amp;
+      (i.dependencies ?? []).every(d =&gt; completed.has(d))
+    );
+    <span class="key">if</span> (!ready.length) <span class="key">throw new</span> Error(<span class="str">"Circular dependency in plan"</span>);
+    ready.forEach(i =&gt; completed.add(i.number));
+    pending = pending.filter(n =&gt; !ready.some(i =&gt; i.number === n));
+    waves.push(ready);
+  }
+  <span class="key">return</span> waves;
+};</code></pre>
+
+<p>Then the execution loop — wave by wave, merge between waves so dependents fast-forward onto fresh work:</p>
+
+<pre><code><span class="cmt">// plan.output.issues is validated; scheduler is deterministic</span>
+<span class="key">for</span> (<span class="key">const</span> wave of wavesOf(plan.output.issues)) {
+  <span class="key">await</span> Promise.all(wave.map(fixAndReview)); <span class="cmt">// lesson 0007's loop</span>
+  <span class="key">for</span> (<span class="key">const</span> issue of wave) {
+    execSync(<span class="str">`git merge agent/fix-</span>${issue.number}<span class="str"> --no-edit</span>`, { stdio: <span class="str">"inherit"</span> });
+  }
+  console.log(<span class="str">`wave complete: </span>${wave.map(i =&gt; i.number).join(<span class="str">", "</span>)}<span class="str">`</span>);
+}</code></pre>
+
+<div class="callout good">
+<span class="tag">This is the dependency answer</span>
+<p>Yes — Sandcastle picks up independent tickets in parallel, across waves of dependent ones. Independent issues share a wave; dependent issues wait for their wave's merge, then their branch starts from the new HEAD and fast-forwards over the dependency's changes. The <code>branch</code> strategy's re-run reuse (<a href="https://github.com/mattpocock/sandcastle/blob/main/docs/adr/0003-reuse-worktree-by-default.md">ADR 0003</a>) is what makes the fast-forward cheap.</p>
+</div>
+
+<h2>Check yourself</h2>
+<div class="quiz">
+
+<div class="quiz-question" data-why-right="Parallel safety needs both: no shared files (they'd conflict) and no dependency between them (they'd race the ordering)."
+ data-why-wrong="Order in a list, model speed, and count of issues say nothing about whether two pieces of work conflict.">
+  <p class="q">What actually decides whether two issues can run in parallel?</p>
+  <button class="opt" data-correct="true">no shared files and no dependency between them</button>
+  <button class="opt">the order they appear in the issue list</button>
+  <button class="opt">whether the agent model is really fast enough</button>
+  <button class="opt">the total number of open issues at start</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-question" data-why-right="Sandcastle never reasons about dependencies — your planner emits evidence (files, dependencies) and your code computes waves from it."
+ data-why-wrong="Dependencies are meaning, not machinery. The branch strategy, merge step, and test suite all operate after that meaning exists.">
+  <p class="q">Who actually reasons about issue dependencies?</p>
+  <button class="opt" data-correct="true">your own planner agent and your orchestration code</button>
+  <button class="opt">Sandcastle decides all dependencies via the branch strategy</button>
+  <button class="opt">the git merge machinery, when conflicts arise</button>
+  <button class="opt">the test suite, after running all the branches</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-question" data-why-right="A dependent issue must start only after its dependencies merge to HEAD, so its branch fast-forwards over their work."
+ data-why-wrong="Starting simultaneously, early, or on human approval all break the ordering guarantee that makes the branch land cleanly.">
+  <p class="q">When must a dependent issue's branch begin?</p>
+  <button class="opt" data-correct="true">only after its dependencies merge back to HEAD</button>
+  <button class="opt">exactly at the same time as its dependencies</button>
+  <button class="opt">long before the independent issues have merged in</button>
+  <button class="opt">only when a live human specifically approves it</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-question" data-why-right="The branch strategy reuses named worktrees and fast-forwards from origin on re-run, so a dependent wave starts cheaply from merged HEAD (ADR 0003)."
+ data-why-wrong="Retries, bind-mount writes, and host-only runs don't give you a fast-forwarding worktree; the named-branch strategy does.">
+  <p class="q">Which Sandcastle feature makes dependent waves feasible?</p>
+  <button class="opt" data-correct="true">the named branches fast-forwarding on each re-run</button>
+  <button class="opt">the structured output retries on failed plan subjects</button>
+  <button class="opt">the bind-mount writes going directly to the host</button>
+  <button class="opt">the noSandbox agents running directly on your host</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+</div>
+
+<h2>Do it now</h2>
+<ol>
+  <li>Extend the plan schema from lesson 0007 with <code>files</code> and <code>dependencies</code> (drop <code>parallelizable</code> — the machine computes it now).</li>
+  <li>Add <code>wavesOf()</code> to <code>main.ts</code> and wrap the execute loop in the wave <code>for</code> loop above.</li>
+  <li>Create two issues: one that adds a helper function, one that uses it (dependency). Run the pipeline.</li>
+  <li>Verify the ordering: watch the log — the independent issues run in wave 1, merge, and the dependent issue's branch starts <em>after</em> their merge commit exists at HEAD.</li>
+  <li>Introduce a deliberately circular dependency into the plan and confirm <code>wavesOf</code> throws the circular-dependency error instead of deadlocking.</li>
+</ol>
+
+<div class="callout key-idea">
+<span class="tag">The factory is complete</span>
+<p>You now have the full architecture: spec stage (this lesson) → parallel implement → gate → review → wave merge (lessons 0001–0007). The only humans left are the ones writing the issues — and nothing in this stack stops you from giving that job to a triage agent too. That's the whole shape of a software factory.</p>
+</div>
+
+<section class="primary-source">
+<h2>Primary source</h2>
+<p>There's no README section for this — it's a pattern you now build <em>on top of</em> Sandcastle. Re-read <a href="https://github.com/mattpocock/sandcastle/blob/main/README.md">the README's templates</a> and <a href="https://github.com/mattpocock/sandcastle/blob/main/docs/adr/0003-reuse-worktree-by-default.md">ADR 0003</a>, and look at how the shipped <code>parallel-planner</code> approaches scheduling. Your spec stage is the deliberate extension of that idea.</p>
+</section>
+
+<footer class="lesson-footer">
+  <p><strong>Stuck? Ask your teacher.</strong> Dependency maps and wave logic are where pipelines deadlock — paste your plan output and your <code>wavesOf</code> result and I'll trace it with you.</p>
+  <p>Previous: <a href="0007-the-pipeline.html">Lesson 0007 — the pipeline</a> · Course map in <a href="0007-the-pipeline.html">0007</a> · References: <a href="../reference/prompt-system.html">prompt system</a>, <a href="../reference/worktree-api.html">worktree API</a>, <a href="../reference/sandbox-providers.html">providers &amp; branch strategies</a></p>
+</footer>
+
+</main>
+</body>
+</html>

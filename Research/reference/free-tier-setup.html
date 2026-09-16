@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reference — Free-Tier Setup for opencode()</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<header class="lesson-header">
+  <p class="lesson-number">Reference</p>
+  <h1>Free-Tier Setup for <code>opencode()</code></h1>
+  <p class="lesson-subtitle">Running Sandcastle with no paid model account — via OpenCode Zen's free models.</p>
+</header>
+
+<h2>The reframe</h2>
+<p><code>opencode</code> is a <em>client</em>, not a model vendor — it has no "tiers" of API keys to buy. The LLM brain comes from a provider. But opencode ships its own gateway — <strong>OpenCode Zen</strong> — with a curated list of coding-verified models, several of them free. The model ID format is <code>opencode/&lt;model-id&gt;</code>, e.g. <code>opencode/big-pickle</code> (the exact string Sandcastle's README uses).</p>
+
+<h2>Zen free models</h2>
+<p>Free as of this writing; the list rotates, so always re-check <code>https://opencode.ai/zen/v1/models</code>.</p>
+<table>
+<thead>
+<tr><th>Model</th><th>ID</th><th>Note</th></tr>
+</thead>
+<tbody>
+<tr><td>Big Pickle</td><td><code>big-pickle</code></td><td>Stealth model; free "for a limited time". During the free period, inputs may be used to improve the model.</td></tr>
+<tr><td>Union Alpha Free</td><td><code>union-alpha</code></td><td>Stealth model; zero-retention provider.</td></tr>
+<tr><td>MiMo-V2.5 Free</td><td><code>mimo-v2.5-free</code></td><td>Limited-time free.</td></tr>
+<tr><td>Nemotron 3 Ultra Free</td><td><code>nemotron-3-ultra-free</code></td><td>NVIDIA trial endpoint — no confidential data.</td></tr>
+<tr><td>Nemotron 3.5 Lightning Free</td><td><code>nemotron-3.5-lightning-free</code></td><td>NVIDIA trial endpoint.</td></tr>
+<tr><td>Muse Spark 1.3 Contributor Free</td><td><code>muse-spark-1.3-contributor-free</code></td><td>Discounted in exchange for training Meta models.</td></tr>
+<tr><td>Ling 3.0 Flash Fin Free</td><td><code>ling-3.0-flash-fin-free</code></td><td>Limited-time free.</td></tr>
+</tbody>
+</table>
+
+<h2>Get a key</h2>
+<ol>
+<li>Sign in to <a href="https://dev.opencode.ai/auth">OpenCode Zen</a> and copy your API key.</li>
+<li>Make it available to opencode as an env var: <code>OPENCODE_API_KEY</code> (primary; <code>ZEN_API_KEY</code> is an alias).</li>
+<li>Sanity-check the key: <code>curl https://opencode.ai/zen/v1/models</code>.</li>
+</ol>
+
+<h2>Wire it into Sandcastle</h2>
+<p>The <code>opencode()</code> agent runs <em>inside</em> the sandbox container, and auth must be env-based (no interactive <code>/connect</code> login possible in a headless run). So the key has to reach the container's environment. Cheapest path: <code>.sandcastle/.env</code>, which the env resolver loads and injects into the container at launch.</p>
+<pre><code><span class="cmt"># .sandcastle/.env</span>
+OPENCODE_API_KEY=sk-zen-...
+</code></pre>
+<pre><code><span class="key">import</span> { run, opencode } from <span class="str">"@ai-hero/sandcastle"</span>;
+
+<span class="key">const</span> result = <span class="key">await</span> run({
+  agent: opencode(<span class="str">"opencode/big-pickle"</span>),
+  sandbox: docker(),
+  promptFile: <span class="str">".sandcastle/prompt.md"</span>,
+});</code></pre>
+<p>Per-run alternative — pass the key explicitly through the agent provider's <code>env</code>:</p>
+<pre><code><span class="key">await</span> run({
+  agent: opencode(<span class="str">"opencode/big-pickle"</span>, {
+    env: { OPENCODE_API_KEY: <span class="str">"sk-zen-..."</span> },
+  }),
+  sandbox: docker(),
+  promptFile: <span class="str">".sandcastle/prompt.md"</span>,
+});</code></pre>
+
+<h2>Env merge rules (README)</h2>
+<ul>
+<li>Provider env (agent + sandbox) <strong>overrides</strong> <code>.sandcastle/.env</code> for shared keys.</li>
+<li>Agent provider env and sandbox provider env <strong>must not overlap</strong> — if they share any key, <code>run()</code> throws.</li>
+<li>Put <code>OPENCODE_API_KEY</code> in exactly one place: <code>.env</code> or the agent <code>env</code>, not both.</li>
+</ul>
+
+<h2>Caveats</h2>
+<ul>
+<li><strong>Not resumable:</strong> <code>opencode()</code> has no session storage — no <code>maxRetries</code>, no <code>fork()</code> (lessons 0005–0006).</li>
+<li><strong>Free is limited-time:</strong> verify the current list before a long AFK run.</li>
+<li><strong>Privacy:</strong> Big Pickle and most free stealth models log data for model improvement — don't point a free model at private code (lesson 0006 covered the <code>&lt;plan&gt;</code> retry implication; this is the data-flow version).</li>
+<li><strong>Rate limits</strong> on the free tier — parallel waves can stall; keep wave sizes modest.</li>
+</ul>
+
+<h2>BYOK free alternatives</h2>
+<p>If you'd rather skip the Zen gateway, opencode also accepts any provider's env-var key directly:</p>
+<ul>
+<li><strong>Google AI Studio</strong> — free Gemini key (<code>GOOGLE_GENERATIVE_AI_API_KEY</code>).</li>
+<li><strong>Groq</strong> — free tier (<code>GROQ_API_KEY</code>).</li>
+<li><strong>OpenRouter</strong> — <code>:free</code> models (<code>OPENROUTER_API_KEY</code>).</li>
+<li><strong>GitHub Models</strong> — free tier with rate limits.</li>
+</ul>
+<p>Same wiring: put the provider's env var in <code>.sandcastle/.env</code>, and pass the model string to <code>opencode("provider/model")</code>.</p>
+
+<p><em>Primary source: <a href="https://dev.opencode.ai/docs/zen">dev.opencode.ai/docs/zen</a>, <a href="https://github.com/mattpocock/sandcastle#provider-env">README — provider env</a>, <a href="https://github.com/mattpocock/sandcastle/blob/main/src/sandboxes/docker.ts">src/sandboxes/docker.ts</a>. Verify live models: <code>curl https://opencode.ai/zen/v1/models</code>.</em></p>
+
+<footer class="lesson-footer">
+  <p>Part of the <em>Sandcastle</em> course. Ask your teacher anything you don't understand.</p>
+</footer>
+</main>
+</body>
+</html>

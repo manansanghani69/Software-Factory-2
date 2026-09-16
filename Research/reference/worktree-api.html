@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reference — Worktree API</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<header class="lesson-header">
+  <p class="lesson-number">Reference</p>
+  <h1>Worktree API</h1>
+  <p class="lesson-subtitle"><code>run()</code>, <code>createSandbox()</code>, and <code>createWorktree()</code> — when to use each.</p>
+</header>
+
+<h2>At a glance</h2>
+<table>
+<thead>
+<tr><th>API</th><th>Lifecycle</th><th>Container</th><th>Branch</th><th>Parallel-safe</th></tr>
+</thead>
+<tbody>
+<tr><td><code>run()</code></td><td>Automatic</td><td>Created + destroyed</td><td>Per call (default or explicit)</td><td>Yes, with <code>branch</code> strategy</td></tr>
+<tr><td><code>createSandbox()</code></td><td>You call <code>sandbox.close()</code> or <code>await using</code></td><td>Stays alive between <code>sandbox.run()</code> calls</td><td>Fixed at creation</td><td>Same branch only — multiple sequential agents</td></tr>
+<tr><td><code>createWorktree()</code></td><td>You call <code>wt.close()</code> or <code>await using</code></td><td>Optional — <code>wt.run()</code> requires one; <code>wt.interactive()</code> defaults to none</td><td>Fixed at creation</td><td>Multiple worktrees on different branches</td></tr>
+</tbody>
+</table>
+
+<h2><code>run()</code></h2>
+<p>One-shot: creates sandbox + worktree, runs agent, collects commits, merges per branch strategy, tears down. Use when you need no shared state between runs.</p>
+<pre><code><span class="key">const</span> result = <span class="key">await</span> run({
+  agent: opencode(<span class="str">"opencode/big-pickle"</span>),
+  sandbox: docker(),
+  promptFile: <span class="str">".sandcastle/prompt.md"</span>,
+  promptArgs: { ISSUE_NUMBER: <span class="str">"42"</span> },
+  branchStrategy: { type: <span class="str">"branch"</span>, branch: <span class="str">"agent/fix-42"</span> },
+});
+<span class="cmt">// result: { iterations, commits, branch, stdout, completionSignal }</span></code></pre>
+
+<h2><code>createSandbox()</code></h2>
+<p>Reusable container on a fixed branch. Multiple <code>sandbox.run()</code> calls accumulate commits on the same branch. <code>sandbox.exec()</code> runs shell commands in the same warm sandbox.</p>
+<pre><code><span class="key">await using</span> sandbox = <span class="key">await</span> createSandbox({
+  branch: <span class="str">"agent/fix-42"</span>,
+  sandbox: docker(),
+  hooks: { sandbox: { onSandboxReady: [{ command: <span class="str">"npm install"</span>, timeoutMs: 300_000 }] } },
+});
+
+<span class="key">await</span> sandbox.run({ agent: opencode(<span class="str">"opencode/big-pickle"</span>), promptFile: <span class="str">".sandcastle/implement.md"</span>, maxIterations: 5 });
+<span class="key">const</span> t = <span class="key">await</span> sandbox.exec(<span class="str">"npm test"</span>); <span class="cmt">// gate — returns exitCode, does not throw</span>
+<span class="key">if</span> (t.exitCode !== <span class="str">0</span>) <span class="key">throw new</span> Error(t.stderr);
+<span class="key">await</span> sandbox.run({ agent: opencode(<span class="str">"opencode/big-pickle"</span>), prompt: <span class="str">"Review the changes."</span> });</code></pre>
+
+<h2><code>createWorktree()</code></h2>
+<p>Independent worktree lifecycle. Use when you want interactive → AFK handoff, or split container/worktree ownership.</p>
+<pre><code><span class="key">await using</span> wt = <span class="key">await</span> createWorktree({
+  branchStrategy: { type: <span class="str">"branch"</span>, branch: <span class="str">"agent/fix-42"</span> },
+});
+
+<span class="cmt">// Interactive — no sandbox, runs on host</span>
+<span class="key">await</span> wt.interactive({ agent: opencode(<span class="str">"opencode/big-pickle"</span>), prompt: <span class="str">"Plan the fix."</span> });
+
+<span class="cmt">// AFK — sandbox required</span>
+<span class="key">await</span> wt.run({ agent: opencode(<span class="str">"opencode/big-pickle"</span>), sandbox: docker(), prompt: <span class="str">"Implement it."</span> });
+
+<span class="cmt">// Or create a long-lived sandbox from the worktree</span>
+<span class="key">await using</span> sandbox = <span class="key">await</span> wt.createSandbox({ sandbox: docker() });</code></pre>
+
+<h2>Split ownership</h2>
+<p><code>wt.createSandbox()</code> creates a sandbox owned by the worktree. <code>sandbox.close()</code> tears down the container only — the worktree stays. <code>wt.close()</code> cleans up the worktree. This differs from top-level <code>createSandbox()</code>, where <code>sandbox.close()</code> owns both.</p>
+
+<h2>Parallel patterns</h2>
+<p><strong>Simple parallelism</strong> (every provider): <code>Promise.all</code> + multiple <code>run()</code> calls, each with its own <code>branchStrategy: { type: "branch" }</code>.</p>
+<p><strong>Fork fan-out</strong> (Claude Code / Codex only): parent <code>run()</code> → <code>parent.fork()</code> per child, each on a distinct branch. Fork isolates the session JSONL, not the branch. <a href="https://github.com/mattpocock/sandcastle/blob/main/docs/adr/0018-fork-is-session-only.md">(ADR 0018)</a></p>
+
+<h2>Safety rules</h2>
+<ul>
+<li><code>head</code> and <code>merge-to-head</code> are <strong>not safe</strong> for concurrent agents.</li>
+<li>Parallel fan-out always requires distinct named branches.</li>
+<li><code>fork()</code> is session-only — you must supply <code>branchStrategy</code> per child.</li>
+</ul>
+
+<p><em>Primary source: <a href="https://github.com/mattpocock/sandcastle#createworktree--independent-worktree-lifecycle">README — createWorktree()</a>, <a href="https://github.com/mattpocock/sandcastle#session-fork">session fork</a>, <a href="https://github.com/mattpocock/sandcastle/blob/main/docs/adr/0018-fork-is-session-only.md">ADR 0018</a>.</em></p>
+
+<footer class="lesson-footer">
+  <p>Part of the <em>Sandcastle</em> course. Ask your teacher anything you don't understand.</p>
+</footer>
+</main>
+</body>
+</html>

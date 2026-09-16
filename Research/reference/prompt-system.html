@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reference — Prompt System</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<header class="lesson-header">
+  <p class="lesson-number">Reference</p>
+  <h1>Prompt System</h1>
+  <p class="lesson-subtitle">How <code>promptFile</code>, <code>promptArgs</code>, and shell expansion compose.</p>
+</header>
+
+<h2>Prompt resolution</h2>
+<p>Exactly one of: <code>prompt</code> (inline string, passed literally) or <code>promptFile</code> (path to file, subject to substitution). Both provided = error. Neither provided = error.</p>
+
+<h2>Execution order</h2>
+<ol>
+<li><code>promptArgs</code> substitution — all <code>{{KEY}}</code> placeholders replaced on the host, including inside shell expressions.</li>
+<li><code>!`command`</code> expansion — shell commands run <em>inside the sandbox</em> after <code>sandbox.onSandboxReady</code>; their stdout replaces the expression.</li>
+<li>Final prompt sent to the agent.</li>
+</ol>
+<p>All shell expressions in a prompt run in parallel. Non-zero exit = run fails immediately.</p>
+
+<h2>Built-in prompt arguments</h2>
+<table>
+<thead>
+<tr><th>Placeholder</th><th>Value</th></tr>
+</thead>
+<tbody>
+<tr><td><code>{{SOURCE_BRANCH}}</code></td><td>Branch the agent works on (per branch strategy)</td></tr>
+<tr><td><code>{{TARGET_BRANCH}}</code></td><td>Host's active branch at <code>run()</code> time</td></tr>
+</tbody>
+</table>
+<p>Cannot be overridden via <code>promptArgs</code> — passing them is an error.</p>
+
+<h2><code>promptArgs</code> rules</h2>
+<ul>
+<li><code>{{KEY}}</code> with no matching arg → <strong>error</strong>, run stops.</li>
+<li>Extra arg with no matching placeholder → <strong>warning</strong>, execution continues.</li>
+<li><code>!`…`</code> inside an argument value is inert — not executed against the shell. Safe for user-authored content (issue bodies, PR descriptions).</li>
+<li><code>promptArgs</code> alongside an inline <code>prompt</code> string → <strong>error</strong>. Use <code>promptFile</code>.</li>
+</ul>
+
+<h2>Completion signal</h2>
+<p>Default: <code>&lt;promise&gt;COMPLETE&lt;/promise&gt;</code>. Override via <code>completionSignal</code> (string or array). The signal must be documented in the prompt for the agent to know to emit it. <code>result.completionSignal</code> reports which signal matched.</p>
+
+<h2>One-liner</h2>
+<pre><code><span class="key">import</span> { run, claudeCode } from <span class="str">"@ai-hero/sandcastle"</span>;
+
+<span class="key">await</span> run({
+  agent: claudeCode(<span class="str">"claude-opus-4-8"</span>),
+  promptFile: <span class="str">".sandcastle/prompt.md"</span>,
+  promptArgs: { ISSUE_NUMBER: <span class="str">"42"</span> },
+  completionSignal: [<span class="str">"TASK_COMPLETE"</span>, <span class="str">"TASK_ABORTED"</span>],
+});</code></pre>
+
+<h2>Prompt file example</h2>
+<pre><code>You are working on {{SOURCE_BRANCH}}. Compare against {{TARGET_BRANCH}}.
+
+#\`gh issue view {{ISSUE_NUMBER}} --json body -q '.body'\`
+
+#\`git log --oneline -10\`
+
+Fix the issue. When done, print &lt;promise&gt;COMPLETE&lt;/promise&gt;.</code></pre>
+
+<p><em>Primary source: <a href="https://github.com/mattpocock/sandcastle#prompts">README — Prompts</a>.</em></p>
+
+<footer class="lesson-footer">
+  <p>Part of the <em>Sandcastle</em> course. Ask your teacher anything you don't understand.</p>
+</footer>
+</main>
+</body>
+</html>

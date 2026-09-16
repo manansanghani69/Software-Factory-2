@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 0007 — The Capstone: Your Autonomous Pipeline</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+<main>
+
+<header class="lesson-header">
+  <p class="lesson-number">Lesson 0007 · Capstone</p>
+  <h1>The Capstone: Your Autonomous Pipeline</h1>
+  <p class="lesson-subtitle">Plan → implement → gate → review → merge. No human in the loop.</p>
+</header>
+
+<h2>Recall before reading</h2>
+<p>Without looking, name the six mechanics this course has taught you, in the order you'd need them to build a pipeline that fixes GitHub issues and merges the results.</p>
+
+<div class="callout key-idea">
+<span class="tag">The mission, assembled</span>
+<p>Everything you've learned feeds one loop. A planner looks at your open issues and emits a <em>validated plan</em>; parallel fix agents work each issue on its own branch; a test gate stops broken work; a reviewer tidies each branch; and green branches merge back. That's the factory — this lesson wires every wire together.</p>
+</div>
+
+<h2>The shape of the pipeline</h2>
+
+<ol class="steps">
+<li><strong>Plan</strong> — one-shot <code>run()</code> + <code>Output.object()</code>. The planner reads open issues via <code>!`gh issue list…`</code> and emits a validated JSON plan (which issues are parallelizable, in what order). <em>Lesson 0006.</em></li>
+<li><strong>Fan out</strong> — <code>Promise.all</code> over the plan's issues, each in its own <code>createSandbox()</code> on its own named branch. <em>Lessons 0005, 0002.</em></li>
+<li><strong>Implement</strong> — <code>sandbox.run()</code> with a prompt file using <code>{{ISSUE_NUMBER}}</code> plus live context. <em>Lessons 0004, 0001.</em></li>
+<li><strong>Gate</strong> — <code>sandbox.exec("npm test")</code>; non-zero exit aborts that issue's review, preserving the branch for inspection. <em>Lesson 0003.</em></li>
+<li><strong>Review</strong> — a second <code>sandbox.run()</code> on the same warm container passes judgement and fixes stragglers. <em>Lesson 0003.</em></li>
+<li><strong>Merge</strong> — green branches merge back into HEAD. <em>Learned this lesson.</em></li>
+</ol>
+
+<h2>The whole file</h2>
+<p>Three prompt files plus one <code>main.ts</code>. First, the prompts.</p>
+
+<pre><code><span class="cmt"># .sandcastle/plan.md — the planner (structured output, single iteration)</span>
+Analyze the open issues in this repo.
+
+#\`gh issue list --state open --json number,title,body,labels --limit 20\`
+
+#\`git log --oneline -10\`
+
+Emit your plan as JSON inside &lt;plan&gt; tags. Shape:
+
+{ "issues": [ { "number": string, "summary": string, "parallelizable": boolean } ] }
+
+Mark an issue parallelizable only if it touches no files another issue touches.
+When done, print &lt;promise&gt;COMPLETE&lt;/promise&gt;.</code></pre>
+
+<pre><code><span class="cmt"># .sandcastle/implement.md — the fix prompt</span>
+You are working on {{SOURCE_BRANCH}}. Compare against {{TARGET_BRANCH}}.
+
+Fix GitHub issue #{{ISSUE_NUMBER}}.
+
+#\`gh issue view {{ISSUE_NUMBER}} --json body,title -q '.body'\`
+
+Follow the repo's conventions. Add or update tests. When the work is
+committed and the build passes, print &lt;promise&gt;COMPLETE&lt;/promise&gt;.</code></pre>
+
+<pre><code><span class="cmt"># .sandcastle/review.md — the reviewer (inline prompt equivalent shown next)</span>
+Review the changes on {{SOURCE_BRANCH}} against {{TARGET_BRANCH}}:
+correctness, tests, conventions. Fix anything clearly wrong, then
+print &lt;promise&gt;COMPLETE&lt;/promise&gt;.</code></pre>
+
+<p>Now <code>main.ts</code> — the orchestrator:</p>
+
+<pre><code><span class="key">import</span> { run, createSandbox, Output, opencode } from <span class="str">"@ai-hero/sandcastle"</span>;
+<span class="key">import</span> { docker } from <span class="str">"@ai-hero/sandcastle/sandboxes/docker"</span>;
+<span class="key">import</span> { z } from <span class="str">"zod"</span>;
+<span class="key">import</span> { execSync } from <span class="str">"node:child_process"</span>;
+
+<span class="cmt">// ---------- 1. PLAN (single-iteration, structured output) ----------</span>
+<span class="key">const</span> plan = <span class="key">await</span> run({
+  agent: opencode(<span class="str">"opencode/big-pickle"</span>),
+  sandbox: docker(),
+  promptFile: <span class="str">".sandcastle/plan.md"</span>,
+  output: Output.object({
+    tag: <span class="str">"plan"</span>,
+    schema: z.object({
+      issues: z.array(z.object({ number: z.string(), summary: z.string(), parallelizable: z.boolean() })),
+    }),
+  }),
+});
+
+<span class="cmt">// plan.output.issues is now typed and validated</span>
+
+<span class="cmt">// ---------- 2..5. IMPLEMENT → GATE → REVIEW, parallel per issue ----------</span>
+<span class="key">const</span> fixAndReview = <span class="key">async</span> (issue) =&gt; {
+  <span class="key">await using</span> sandbox = <span class="key">await</span> createSandbox({
+    branch: <span class="str">`agent/fix-</span>${issue.number}<span class="str">`</span>,
+    sandbox: docker(),
+    hooks: {
+      sandbox: {
+        onSandboxReady: [{ command: <span class="str">"npm install"</span>, timeoutMs: 300_000 }],
+      },
+    },
+  });
+
+  <span class="cmt">// implement</span>
+  <span class="key">await</span> sandbox.run({
+    agent: opencode(<span class="str">"opencode/big-pickle"</span>),
+    promptFile: <span class="str">".sandcastle/implement.md"</span>,
+    promptArgs: { ISSUE_NUMBER: issue.number },
+    maxIterations: 5,
+  });
+
+  <span class="cmt">// gate — non-zero exit aborts this issue's review</span>
+  <span class="key">const</span> gate = <span class="key">await</span> sandbox.exec(<span class="str">"npm test"</span>);
+  <span class="key">if</span> (gate.exitCode !== <span class="str">0</span>) {
+    <span class="key">throw new</span> Error(<span class="str">`Tests failed on #</span>${issue.number}<span class="str">:\n</span>${gate.stdout}\n${gate.stderr}<span class="str">`</span>);
+  }
+
+  <span class="cmt">// review (same warm container, same branch)</span>
+  <span class="key">await</span> sandbox.run({
+    agent: opencode(<span class="str">"opencode/big-pickle"</span>),
+    promptFile: <span class="str">".sandcastle/review.md"</span>,
+    promptArgs: { ISSUE_NUMBER: issue.number },
+    maxIterations: 3,
+  });
+};
+
+<span class="key">const</span> parallelizable = plan.output.issues.filter(i =&gt; i.parallelizable);
+
+<span class="key">try</span> {
+  <span class="key">await</span> Promise.all(parallelizable.map(fixAndReview));
+} <span class="key">catch</span> (err) {
+  console.error(<span class="str">"Pipeline stopped — investigate the failure:"</span>, err.message);
+  process.exitCode = <span class="str">1</span>;
+}
+
+<span class="cmt">// ---------- 6. MERGE every green branch back ----------</span>
+<span class="key">for</span> (<span class="key">const</span> issue of parallelizable) {
+  execSync(<span class="str">`git merge agent/fix-</span>${issue.number}<span class="str"> --no-edit`</span>, { stdio: <span class="str">"inherit"</span> });
+}
+
+console.log(<span class="str">"All issues fixed, reviewed, and merged."</span>);</code></pre>
+
+<div class="callout note">
+<span class="tag">What you own vs. what Sandcastle owns</span>
+<p>Sandcastle's job ends when the reviewer's commits land on the branch. The <strong>merge back</strong> is your code (plain <code>git</code> in the harness here). On a remote repo, that merge becomes a push + <code>gh pr merge --merge</code>; either way, no human is required.</p>
+</div>
+
+<div class="callout warning">
+<span class="tag">Fail loudly, preserve work</span>
+<p>When one issue's tests fail, this pipeline throws and the surviving branches stay checked out — that's the <code>await using</code> cleanup preserving dirty worktrees so you can investigate. What's left of the loop keeps running: the <code>try/catch</code> catches the first failing issue while its siblings proceed.</p>
+<p>Decide deliberately whether you want <strong>fail-fast</strong> (above: first failure stops the merge) or <strong>fail-open</strong> (below: review everything, merge only the green branches).</p>
+</div>
+
+<pre><code><span class="cmt">// Fail-open alternative: review everything, merge only the green.</span>
+<span class="key">const</span> outcomes = <span class="key">await</span> Promise.allSettled(parallelizable.map(fixAndReview));
+<span class="key">const</span> green = parallelizable.filter((_, i) =&gt; outcomes[i].status === <span class="str">"fulfilled"</span>);
+<span class="key">for</span> (<span class="key">const</span> issue of green) {
+  execSync(<span class="str">`git merge agent/fix-</span>${issue.number}<span class="str"> --no-edit</span>`, { stdio: <span class="str">"inherit"</span> });
+}</code></pre>
+
+<h2>Before you run it for real</h2>
+<ul>
+<li><strong>Scratch repo first.</strong> Point the pipeline at a repo you own with a few open issues and a test suite. Never first-light this against production code.</li>
+<li><strong>Keep the plan single-iteration.</strong> <code>Output.object()</code> needs <code>maxIterations: 1</code> (the default). The fix and review runs can loop.</li>
+<li><strong>opencode can't retry output.</strong> If the planner emits a malformed <code>&lt;plan&gt;</code>, the run fails — re-run it. For automatic retries you'd need a resumable provider (lesson 0006).</li>
+<li><strong>The template shortcut.</strong> <code>npx @ai-hero/sandcastle init --template parallel-planner-with-review</code> scaffolds all of this and more. This lesson is what's <em>inside</em> it, so you can bend it to your workflow rather than reverse-engineering the generated code.</li>
+</ul>
+
+<h2>Check yourself</h2>
+<div class="quiz">
+
+<div class="quiz-question" data-why-right="Output.object() needs a single iteration plus a schema — that's the plan step guaranteeing the orchestrator gets typed, validated issues to fan out."
+ data-why-wrong="Structured output demands maxIterations 1 and a validation schema; branches, hooks, and signals don't shape the payload.">
+  <p class="q">The planner's <code>&lt;plan&gt;</code> tag requires what from its <code>run()</code> call?</p>
+  <button class="opt" data-correct="true">single iteration plus a schema to validate against</button>
+  <button class="opt">a parallel branch plus a sandbox hook setup</button>
+  <button class="opt">promptArgs plus the built-in target branch channel</button>
+  <button class="opt">a completion signal that ends the iteration loop</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-question" data-why-right="promptFile shell expressions execute inside the sandbox after the setup hooks, so they see the same repo state the agent sees (e.g. installed gh, closed issue data)."
+ data-why-wrong="!command runs in the sandbox, not on the host, not in the worktree outside the container.">
+  <p class="q">In the fix prompt, where does <code>!`gh issue view`</code> execute?</p>
+  <button class="opt" data-correct="true">inside the sandbox, after the setup hooks complete</button>
+  <button class="opt">upon your host machine, before any container starts</button>
+  <button class="opt">on the host, after the code review agent</button>
+  <button class="opt">inside the git worktree but outside any container</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-question" data-why-right="Parallel fan-out is only safe when each agent works its own named branch — various runs sharing head or a temp branch race each other (ADR 0018; lesson 0005)."
+ data-why-wrong="The shared-state strategies are exactly what breaks concurrency. Isolation comes from distinct named branches.">
+  <p class="q">To run three fix agents in parallel, what must each one have?</p>
+  <button class="opt" data-correct="true">a distinct named branch for its own work</button>
+  <button class="opt">the same shared branch to keep everything together</button>
+  <button class="opt">a merge-to-head strategy for automatic merge back home</button>
+  <button class="opt">an exec gate that runs tests before starting</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-question" data-why-right="The gate is an exit code — sandbox.exec() returns it instead of throwing, so the pipeline decides: abort this issue's review or proceed."
+ data-why-wrong="exec returns an exit code; it neither throws nor returns booleans, and it definitely runs synchronously.">
+  <p class="q">Between implement and review, <code>sandbox.exec("npm test")</code> returns what?</p>
+  <button class="opt" data-correct="true">exit code, letting you decide whether to continue</button>
+  <button class="opt">a boolean, true if all tests passed successfully</button>
+  <button class="opt">nothing at all, tests run silently in the background</button>
+  <button class="opt">an error, thrown immediately when any test fails</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+</div>
+
+<h2>Do it now</h2>
+<ol>
+  <li>Re-create the three prompts and <code>main.ts</code> above in your scratch repo. <code>npm i -D zod</code> first — the planner schema needs it.</li>
+  <li>Run <code>npx tsx .sandcastle/main.ts</code>. If your repo has no open GitHub issues, hardcode the plan (define <code>plan.output.issues</code> directly) or use the custom tracker from <code>init</code>.</li>
+  <li>Watch the log: the plan should be a validated JSON plan first, then parallel sandboxes for each issue.</li>
+  <li>After it finishes: <code>git log --oneline</code> — you should see implement commits, review commits, and a merge commit, all with no human hands.</li>
+  <li>Break one test deliberately, rerun, and confirm the gate blocks that issue's review while the others complete.</li>
+</ol>
+
+<div class="callout key-idea">
+<span class="tag">The loop is now yours</span>
+<p>Every mechanic in this course is in that file: branches (0002), prompts (0004), sandbox lifecycle (0001, 0003), parallelism (0005), structured decisions (0006). You don't just know Sandcastle — you've built on top of it.</p>
+</div>
+
+<h2>Course map</h2>
+<table>
+<thead>
+<tr><th>#</th><th>Lesson</th><th>Mechanic you now own</th></tr>
+</thead>
+<tbody>
+<tr><td>0001</td><td><a href="0001-your-first-run.html">Your first run</a></td><td><code>run()</code>, providers, the mental model</td></tr>
+<tr><td>0002</td><td><a href="0002-branch-strategies.html">Branch strategies</a></td><td>Named branches, safety, ADR 0003</td></tr>
+<tr><td>0003</td><td><a href="0003-implement-then-review.html">Implement-then-review</a></td><td><code>createSandbox()</code>, hooks, gates</td></tr>
+<tr><td>0004</td><td><a href="0004-dynamic-prompts.html">Dynamic prompts</a></td><td><code>promptArgs</code>, <code>!`cmd`</code>, built-ins</td></tr>
+<tr><td>0005</td><td><a href="0005-parallel-agents.html">Parallel agents</a></td><td><code>Promise.all</code>, worktrees, fork</td></tr>
+<tr><td>0006</td><td><a href="0006-structured-output.html">Structured output</a></td><td><code>Output.object()</code>, validation, retries</td></tr>
+<tr><td>0007</td><td><a href="0007-the-pipeline.html">The pipeline</a></td><td>The whole loop assembled</td></tr>
+</tbody>
+</table>
+
+<h2>Where the course points next</h2>
+<p>You've reached the end of the mechanics. The ground you're on now is <em>real-world operation</em>: getting a pipeline to survive a live repo, a flaky test suite, a Windows-specific Docker quirk, or a token rotation. That's where the wisdom of practitioners matters most. The resources page has the community map — <a href="https://github.com/mattpocock/sandcastle/issues">Sandcastle's issues</a> are where real setups get debugged, and Matt's Discord #AI channel is where pattern talk happens.</p>
+
+<section class="primary-source">
+<h2>Primary source</h2>
+<p>By now your primary source is the running system itself. Read the <a href="https://github.com/mattpocock/sandcastle/blob/main/README.md">README top-to-bottom</a> once more — it should read like review notes instead of new ground. Then open <a href="https://github.com/mattpocock/sandcastle/blob/main/ideas/">the ideas folder</a> in the repo and see what the maintainers are thinking about next.</p>
+</section>
+
+<footer class="lesson-footer">
+  <p><strong>Stuck? Ask your teacher.</strong> The most common first-light failures are a malformed <code>&lt;plan&gt;</code>, a gate that can't find tests, or branches racing the merge. Paste your log and I'll help you read it.</p>
+  <p>Reference: <a href="../reference/prompt-system.html">prompt system</a> · <a href="../reference/worktree-api.html">worktree API</a> · <a href="../reference/sandbox-providers.html">providers &amp; branch strategies</a></p>
+</footer>
+
+</main>
+</body>
+</html>

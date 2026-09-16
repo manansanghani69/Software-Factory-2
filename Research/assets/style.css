@@ -1,0 +1,302 @@
+@charset "UTF-8";
+/* Sandcastle course — shared stylesheet (Tufte-flavoured, print-friendly) */
+
+:root {
+  --ink: #2b2a28;
+  --ink-soft: #6a675f;
+  --paper: #fdfcf8;
+  --paper-alt: #f6f3eb;
+  --rule: #ddd8ca;
+  --accent: #9a4b2f; /* burnt sienna */
+  --accent-dark: #7c3a22;
+  --code-bg: #f3efe4;
+  --good: #2f6f4f;
+  --bad: #a23b3b;
+  --note: #3a5a8c;
+  --sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html { font-size: 18px; }
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: var(--paper);
+  font-family: var(--serif);
+  line-height: 1.58;
+  font-feature-settings: "kern" 1, "liga" 1;
+}
+
+/* ---------- Layout ---------- */
+
+main {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+}
+
+header.lesson-header {
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 1rem;
+  margin-bottom: 2.2rem;
+}
+
+.lesson-number {
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 0.55rem;
+}
+
+header.lesson-header h1 {
+  font-size: 2.1rem;
+  line-height: 1.16;
+  font-weight: 600;
+  margin: 0 0 0.35rem;
+}
+
+.lesson-subtitle {
+  font-style: italic;
+  color: var(--ink-soft);
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+/* ---------- Headings ---------- */
+
+h2 {
+  font-size: 1.28rem;
+  font-weight: 600;
+  margin: 2.6rem 0 0.7rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+h3 {
+  font-size: 1.07rem;
+  font-weight: 600;
+  margin: 1.8rem 0 0.5rem;
+}
+
+h2 code, h3 code { font-size: 0.92em; }
+
+/* ---------- Body text ---------- */
+
+p { margin: 0.7rem 0; }
+
+a {
+  color: var(--accent-dark);
+  text-decoration-thickness: 0.06em;
+  text-underline-offset: 0.14em;
+}
+
+a:hover { color: var(--accent); }
+
+strong { font-weight: 700; }
+
+ul, ol { margin: 0.7rem 0 0.7rem 1.2rem; padding-left: 0.4rem; }
+li { margin: 0.32rem 0; }
+
+blockquote {
+  margin: 1.2rem 0;
+  padding: 0.3rem 1.1rem;
+  border-left: 3px solid var(--accent);
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+hr {
+  border: none;
+  border-top: 1px solid var(--rule);
+  margin: 2.4rem 0;
+}
+
+/* ---------- Code ---------- */
+
+code {
+  font-family: var(--mono);
+  font-size: 0.82em;
+  background: var(--code-bg);
+  padding: 0.12em 0.35em;
+  border-radius: 3px;
+}
+
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 0.9rem 1.1rem;
+  overflow-x: auto;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+  font-size: 1em;
+}
+
+pre .cmt { color: var(--ink-soft); font-style: italic; } /* comment */
+pre .key { color: var(--accent-dark); }                    /* keyword/arg */
+pre .str { color: var(--good); }                           /* string literal */
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1rem 0 1.2rem;
+  font-size: 0.88rem;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+
+th {
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  border-bottom: 2px solid var(--ink);
+}
+
+/* ---------- Callouts ---------- */
+
+.callout {
+  border-radius: 6px;
+  padding: 0.85rem 1.1rem;
+  margin: 1.3rem 0;
+  font-size: 0.95rem;
+}
+
+.callout .tag {
+  display: inline-block;
+  font-family: var(--sans);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  margin-bottom: 0.35rem;
+}
+
+.callout.key-idea { background: var(--paper-alt); border: 1px solid var(--rule); }
+.callout.key-idea .tag { color: var(--accent); }
+
+.callout.warning { background: #faf1e6; border: 1px solid #e6c79e; }
+.callout.warning .tag { color: var(--bad); }
+
+.callout.note { background: #eef2f8; border: 1px solid #ccd6e6; }
+.callout.note .tag { color: var(--note); }
+
+.callout.good { background: #eef4ef; border: 1px solid #c5d7c9; }
+.callout.good .tag { color: var(--good); }
+
+.callout p:first-of-type { margin-top: 0; }
+.callout p:last-child { margin-bottom: 0; }
+
+/* ---------- Steps ---------- */
+
+ol.steps { counter-reset: step; list-style: none; margin-left: 0; }
+ol.steps > li {
+  counter-increment: step;
+  position: relative;
+  padding: 0.85rem 0 0.85rem 3rem;
+  border-bottom: 1px dashed var(--rule);
+}
+ol.steps > li::before {
+  content: counter(step, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: 0.9rem;
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ---------- Quiz ---------- */
+
+.quiz { margin: 1.6rem 0; }
+
+.quiz-question {
+  margin: 1.6rem 0;
+  padding: 1rem 1.2rem;
+  background: var(--paper-alt);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+
+.quiz-question .q {
+  font-weight: 700;
+  margin: 0 0 0.7rem;
+}
+
+.quiz-question .opt {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin: 0.35rem 0;
+  padding: 0.45rem 0.7rem;
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  font-family: var(--serif);
+  font-size: 0.92rem;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.quiz-question .opt:hover { border-color: var(--accent); }
+
+.quiz-question .opt.correct { background: #ddefd6; border-color: var(--good); }
+.quiz-question .opt.wrong { background: #f6dede; border-color: var(--bad); }
+.quiz-question .opt.locked { cursor: default; opacity: 0.9; }
+
+.quiz-feedback { display: none; margin-top: 0.6rem; font-size: 0.9rem; }
+.quiz-feedback.show { display: block; }
+.quiz-feedback.ok { color: var(--good); }
+.quiz-feedback.no { color: var(--bad); }
+
+/* ---------- Primary source / footer ---------- */
+
+.primary-source {
+  margin: 2.4rem 0 1rem;
+  padding-top: 1.2rem;
+  border-top: 2px solid var(--accent);
+}
+
+.primary-source h2 { border: none; margin-top: 0; }
+
+footer.lesson-footer {
+  margin-top: 3.5rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--rule);
+  font-style: italic;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+footer.lesson-footer strong { color: var(--ink); }
+
+/* ---------- Print ---------- */
+
+@media print {
+  html { font-size: 12pt; }
+  body { background: #fff; }
+  main { max-width: none; padding: 0 1rem; }
+  .quiz-question .opt { cursor: default; }
+  a { color: inherit; }
+  pre { page-break-inside: avoid; }
+  h2 { page-break-after: avoid; }
+}

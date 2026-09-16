@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 0004 — Dynamic Prompts</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+<main>
+
+<header class="lesson-header">
+  <p class="lesson-number">Lesson 0004</p>
+  <h1>Dynamic Prompts</h1>
+  <p class="lesson-subtitle">Pull live context into your prompt at runtime — from the repo, from arguments, from both.</p>
+</header>
+
+<h2>Recall before reading</h2>
+<p>From lessons 0001–0003: what does <code>promptFile</code> do that an inline <code>prompt</code> string does not, and why can't you use both at once?</p>
+
+<div class="callout key-idea">
+<span class="tag">Why this matters</span>
+<p>Your implement-then-review pipeline from lesson 0003 works — but it's hardcoded to one issue. Dynamic prompts let you feed it any issue number and get live context (the issue body, recent commits, the branch name) injected automatically. That turns a demo into a real factory loop.</p>
+</div>
+
+<h2>The three features</h2>
+<p>Everything below applies <strong>only</strong> to <code>promptFile</code> — inline <code>prompt</code> strings are passed to the agent literally, with no substitution, no expansion, no built-in injection. <a href="https://github.com/mattpocock/sandcastle#prompt-resolution">(README: prompt resolution)</a></p>
+
+<h3>1. <code>promptArgs</code> with <code>{{KEY}}</code></h3>
+<p>Inject values into your prompt file at call time. Reuse the same prompt across different issues:</p>
+
+<pre><code><span class="cmt">// main.ts — the call site</span>
+<span class="key">await</span> sandbox.run({
+  agent: opencode(<span class="str">"opencode/big-pickle"</span>),
+  promptFile: <span class="str">".sandcastle/implement.md"</span>,
+  promptArgs: { ISSUE_NUMBER: <span class="str">"42"</span>, PRIORITY: <span class="str">"high"</span> },
+});</code></pre>
+
+<pre><code><span class="cmt"># .sandcastle/implement.md — the prompt</span>
+Work on issue #{{ISSUE_NUMBER}} (priority: {{PRIORITY}}).
+When done, print &lt;promise&gt;COMPLETE&lt;/promise&gt;.</code></pre>
+
+<p>A <code>{{KEY}}</code> placeholder with no matching prompt argument is an <strong>error</strong>. Extra prompt arguments you don't use produce a warning — safe, but noisy. <a href="https://github.com/mattpocock/sandcastle#prompt-arguments-with-key">(README)</a></p>
+
+<h3>2. Live context with <code>!`command`</code></h3>
+<p>Shell expressions in your prompt file are replaced with the command's stdout — <em>inside the sandbox</em>, after <code>sandbox.onSandboxReady</code> hooks complete, so they see the repo state the agent sees:</p>
+
+<pre><code><span class="cmt"># .sandcastle/implement.md</span>
+# Open issues
+
+!\`gh issue list --state open --label Sandcastle --json number,title,body --limit 10\`
+
+# Recent commits
+
+!\`git log --oneline -10\`
+
+Work on issue #{{ISSUE_NUMBER}}. Compare against {{TARGET_BRANCH}}.</code></pre>
+
+<p>All expressions run <strong>in parallel</strong> for faster expansion. If any command exits non-zero, the run fails immediately. <a href="https://github.com/mattpocock/sandcastle#dynamic-context-with-command">(README)</a></p>
+
+<h3>3. Built-in prompt arguments</h3>
+<p>Sandcastle injects two automatically — no <code>promptArgs</code> entry needed:</p>
+
+<table>
+<thead>
+<tr><th>Placeholder</th><th>Value</th></tr>
+</thead>
+<tbody>
+<tr><td><code>{{SOURCE_BRANCH}}</code></td><td>The branch the agent works on</td></tr>
+<tr><td><code>{{TARGET_BRANCH}}</code></td><td>The host's active branch at <code>run()</code> time</td></tr>
+</tbody>
+</table>
+<p>You cannot override these via <code>promptArgs</code> — it's an error to try. <a href="https://github.com/mattpocock/sandcastle#built-in-prompt-arguments">(README)</a></p>
+
+<h2>Execution order</h2>
+<p>The three features fire in a strict sequence — this matters when <code>{{KEY}}</code> appears inside a <code>!`command`</code> expression:</p>
+
+<ol>
+<li><strong><code>{{KEY}}</code> substitution</strong> (on the host) — all placeholders, including those inside shell expressions, are replaced first.</li>
+<li><strong><code>!`command`</code> expansion</strong> (inside the sandbox) — the now-complete shell commands run and their stdout replaces the expression.</li>
+<li><strong>Final prompt</strong> sent to the agent.</li>
+</ol>
+
+<p>This means you can write:</p>
+<pre><code>!\`gh issue view {{ISSUE_NUMBER}} --json body -q .body\`</code></pre>
+<p>...and <code>{{ISSUE_NUMBER}}</code> is replaced <em>before</em> the shell command runs, so the correct issue is fetched. Safe and deliberate.</p>
+
+<div class="callout note">
+<span class="tag">User content is safe inside <code>promptArgs</code></span>
+<p>A <code>!`…`</code> pattern that appears inside a <em>prompt argument value</em> is treated as inert text — it won't execute against the shell. You can pass issue titles, PR descriptions, or docs excerpts through <code>promptArgs</code> without risk. <a href="https://github.com/mattpocock/sandcastle#prompt-arguments-with-key">(README)</a></p>
+</div>
+
+<h2>Put it together: an issue-driven pipeline</h2>
+<p>A single prompt file that works for any issue, with live context pulled from GitHub and git:</p>
+
+<pre><code><span class="cmt"># .sandcastle/implement.md</span>
+You are working on {{SOURCE_BRANCH}}. Compare against {{TARGET_BRANCH}}.
+
+#\`gh issue view {{ISSUE_NUMBER}} --json body,title -q '.body'\`
+
+#\`git log --oneline -10\`
+
+Fix the issue described above. When done, print &lt;promise&gt;COMPLETE&lt;/promise&gt;.</code></pre>
+
+<p>The call site — any issue, any priority:</p>
+<pre><code><span class="key">await</span> sandbox.run({
+  agent: opencode(<span class="str">"opencode/big-pickle"</span>),
+  promptFile: <span class="str">".sandcastle/implement.md"</span>,
+  promptArgs: { ISSUE_NUMBER: <span class="str">"73"</span>, PRIORITY: <span class="str">"medium"</span> },
+});</code></pre>
+
+<p>Change the number, rerun. Same prompt, different issue, live context every time.</p>
+
+<h2>The completion signal lives in your prompt</h2>
+<p>Sandcastle never injects <code>&lt;promise&gt;COMPLETE&lt;/promise&gt;</code> — it's a convention <em>you document in the prompt</em> for the agent to follow. You can override the default signal string by passing <code>completionSignal</code> to <code>run()</code>, or pass an array of alternatives:</p>
+
+<pre><code><span class="key">await</span> sandbox.run({
+  agent: opencode(<span class="str">"opencode/big-pickle"</span>),
+  promptFile: <span class="str">".sandcastle/implement.md"</span>,
+  completionSignal: [<span class="str">"TASK_COMPLETE"</span>, <span class="str">"TASK_ABORTED"</span>],
+});</code></pre>
+
+<p>Document whichever string(s) you choose in the prompt file, so the agent knows what to emit. The matched signal appears on <code>result.completionSignal</code> — useful for branching on whether work finished or was aborted.</p>
+
+<h2>Check yourself</h2>
+<div class="quiz">
+
+<div class="quiz-question" data-why-right="promptArgs replace {{KEY}} first, then shell expressions run inside the sandbox. This is why {{KEY}} inside !command works correctly."
+ data-why-wrong="The order matters — promptArgs substitute before shell expansion, not after or simultaneously.">
+  <p class="q">Which fires first: <code>promptArgs</code> substitution or <code>!`command`</code> expansion?</p>
+  <button class="opt" data-correct="true">promptArgs replace keys first, then commands expand</button>
+  <button class="opt">Commands run first, then keys are injected</button>
+  <button class="opt">Both happen in parallel during sandbox setup</button>
+  <button class="opt">Only one fires, never both at once</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-question" data-why-right="The README is explicit: inline prompt strings are passed literally, with no {{KEY}} substitution, no !command expansion, no built-in injection. Use promptFile for substitution."
+ data-why-wrong="Inline prompts don't get special treatment — they go straight to the agent exactly as written.">
+  <p class="q">What happens when you pass an inline <code>prompt</code> string?</p>
+  <button class="opt" data-correct="true">Passed to agent literally, no substitutions applied</button>
+  <button class="opt">promptArgs are substituted into the string</button>
+  <button class="opt">Built-in args are injected before it's sent</button>
+  <button class="opt">Shell expressions are expanded inside it</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-question" data-why-right="If a {{KEY}} appears in the prompt but isn't passed in promptArgs, Sandcastle throws an error — not a warning, a hard error. Missing context means the prompt is broken."
+ data-why-wrong="Sandcastle is strict about missing keys: the prompt would be broken if it had unresolved placeholders.">
+  <p class="q">What happens if a <code>{{KEY}}</code> in the prompt has no matching entry in <code>promptArgs</code>?</p>
+  <button class="opt" data-correct="true">Sandcastle throws an error and stops the run</button>
+  <button class="opt">The key is replaced with an empty string silently</button>
+  <button class="opt">A warning is logged and execution continues</button>
+  <button class="opt">The agent receives the raw placeholder as text</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+</div>
+
+<h2>Do it now</h2>
+<ol>
+  <li>Write <code>.sandcastle/implement.md</code> with <code>!`git log --oneline -10`</code> at the top and a <code>{{ISSUE_NUMBER}}</code> placeholder in the body.</li>
+  <li>In <code>main.ts</code>, pass <code>promptArgs: { ISSUE_NUMBER: "1" }</code> to <code>sandbox.run()</code>.</li>
+  <li>Run it. Check <code>.sandcastle/logs/</code> — you should see the expanded prompt with real git log output at the top.</li>
+  <li>Change the issue number and rerun — same prompt, different context.</li>
+  <li>Bonus: add a second <code>!`gh issue view {{ISSUE_NUMBER}} --json body -q .body`</code> expression and verify both run in parallel (check the log timestamps).</li>
+</ol>
+
+<div class="callout key-idea">
+<span class="tag">Then what?</span>
+<p>You now have a reusable prompt that works for any issue. Next: parallel agents — running multiple implement-then-review loops on different issues simultaneously, each on its own named branch, in separate containers. That's the full factory.</p>
+</div>
+
+<section class="primary-source">
+<h2>Primary source</h2>
+<p>Read the <a href="https://github.com/mattpocock/sandcastle#dynamic-context-with-command">Dynamic context</a>, <a href="https://github.com/mattpocock/sandcastle#prompt-arguments-with-key">Prompt arguments</a>, and <a href="https://github.com/mattpocock/sandcastle#early-termination-with-promisecompletepromise">Completion signal</a> sections in the README. Everything in this lesson is compressed from those three.</p>
+</section>
+
+<footer class="lesson-footer">
+  <p><strong>Stuck? Ask your teacher.</strong> If a <code>!`command`</code> fails or <code>{{KEY}}</code> errors out, paste the log line and I'll help you fix the prompt file.</p>
+  <p>Previous: <a href="0003-implement-then-review.html">Lesson 0003 — implement-then-review</a> · Reference: <a href="../reference/prompt-system.html">prompt system</a> · <a href="../reference/sandbox-providers.html">providers &amp; branch strategies</a></p>
+</footer>
+
+</main>
+</body>
+</html>

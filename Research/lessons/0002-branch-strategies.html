@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 0002 — Branch Strategies</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+<main>
+
+<header class="lesson-header">
+  <p class="lesson-number">Lesson 0002</p>
+  <h1>Branch Strategies</h1>
+  <p class="lesson-subtitle">Keep the agent's work off the main line — and make re-runs safe.</p>
+</header>
+
+<h2>Recall before reading</h2>
+<p>Close the reference. From memory, write down the three branch strategies and which one <code>docker()</code> defaults to. Then read on — the answers are in the table below.</p>
+
+<div class="callout key-idea">
+<span class="tag">Why this matters</span>
+<p>A real autonomous pipeline can't have agents writing straight into your working directory. You need to know where an agent's commits land, why, and which strategy survives running many agents at once — that's the difference between a demo and a factory.</p>
+</div>
+
+<h2>The three strategies</h2>
+<table>
+<thead>
+<tr><th>Strategy</th><th>What happens</th><th>When to use it</th></tr>
+</thead>
+<tbody>
+<tr>
+<td><code>{ type: "head" }</code></td>
+<td>Agent writes directly into the host working directory. No worktree, no branch.</td>
+<td>Scratch repos, one-off exploration. Never for the pipeline.</td>
+</tr>
+<tr>
+<td><code>{ type: "merge-to-head" }</code></td>
+<td>Temp branch in a git worktree; agent works there; merged back to HEAD at the end, temp branch deleted.</td>
+<td>A safe one-shot when you want the result on your current branch but nothing left behind.</td>
+</tr>
+<tr>
+<td><code>{ type: "branch", branch: "agent/x" }</code></td>
+<td>Worktree on a real named branch; commits land on <code>agent/x</code>. Re-running with the same name <strong>reuses</strong> the worktree and fast-forwards from <code>origin</code> when safe.</td>
+<td>Parallel agents, PR-style workflows, repeated runs on the same task. <em>Don't run agents on your main line, keep them pointed at named branches.</em></td>
+</tr>
+</tbody>
+</table>
+<p>Defaults: <code>head</code> for bind-mount providers, <code>merge-to-head</code> for isolated providers. <a href="https://github.com/mattpocock/sandcastle#how-it-works">(README: How it works)</a></p>
+
+<div class="callout note">
+<span class="tag">Why <code>branch</code> re-runs are safe</span>
+<p>Re-running <code>{ type: "branch", branch: "agent/x" }</code> reuses the existing worktree instead of piling up temp worktrees. It fast-forwards from <code>origin</code> when safe, so a stale worktree doesn't fight itself across runs. Decision logged in <a href="https://github.com/mattpocock/sandcastle/blob/main/docs/adr/0003-reuse-worktree-by-default.md">ADR 0003</a>.</p>
+</div>
+
+<h2>Use it</h2>
+<p>Your <code>main.ts</code>, changed from lesson 0001 to the pipeline-safe version:</p>
+
+<pre><code><span class="key">import</span> { run, opencode } from <span class="str">"@ai-hero/sandcastle"</span>;
+<span class="key">import</span> { docker } from <span class="str">"@ai-hero/sandcastle/sandboxes/docker"</span>;
+
+<span class="key">const</span> result = <span class="key">await</span> run({
+  agent: opencode(<span class="str">"opencode/big-pickle"</span>),
+  sandbox: docker(),
+  promptFile: <span class="str">".sandcastle/prompt.md"</span>,
+  branchStrategy: { type: <span class="str">"branch"</span>, branch: <span class="str">"agent/fix-42"</span> },
+  maxIterations: 5,
+});
+
+console.log(result.branch);        <span class="cmt">// "agent/fix-42"</span>
+console.log(result.commits);       <span class="cmt">// the agent's work, on that branch</span></code></pre>
+
+<p>Run it, then run it again with a change to <code>prompt.md</code>. On the second run you'll see the worktree get reused rather than rebuilt — that's ADR 0003 in action.</p>
+
+<h2>Built-in prompt args for branch work</h2>
+<p>When your prompt comes from a <code>promptFile</code>, Sandcastle injects two values you don't have to supply: <code>{{SOURCE_BRANCH}}</code> (the branch the agent works on) and <code>{{TARGET_BRANCH}}</code> (your host's active branch). Put them in your prompt so the agent diffs against the right base:</p>
+
+<pre><code>You are working on {{SOURCE_BRANCH}}.
+When you diff your changes, compare against {{TARGET_BRANCH}}.
+Fix issue #42 and finish by printing &lt;promise&gt;COMPLETE&lt;/promise&gt;.</code></pre>
+
+<p>Two gotchas to remember: this substitution applies <strong>only</strong> to <code>promptFile</code> — inline <code>prompt</code> strings are passed literally, and passing <code>promptArgs</code> alongside an inline prompt is an error. <a href="https://github.com/mattpocock/sandcastle#prompt-resolution">(README: prompts)</a></p>
+
+<div class="callout warning">
+<span class="tag">Never run these in parallel</span>
+<p><code>head</code> and <code>merge-to-head</code> are <strong>not</strong> safe for concurrent agents: <code>head</code> shares the host working directory across all of them, and <code>merge-to-head</code> races <code>git merge</code> against the same HEAD. Parallel fan-out requires each agent to get its own distinct named branch — that's the <code>branch</code> strategy. <a href="https://github.com/mattpocock/sandcastle/blob/main/docs/adr/0018-fork-is-session-only.md">(ADR 0018)</a></p>
+</div>
+
+<h2>Check yourself</h2>
+<div class="quiz">
+
+<div class="quiz-question" data-why-right="Re-running a named branch reuses the worktree and fast-forwards from origin when safe (ADR 0003)."
+ data-why-wrong="The worktree is deliberately kept and reused — that's the whole point of ADR 0003.">
+  <p class="q">Re-running with <code>branch: "agent/x"</code> — what happens to the prior worktree?</p>
+  <button class="opt" data-correct="true">Reused and fast-forwarded from origin safely</button>
+  <button class="opt">Deleted, then recreated from scratch again</button>
+  <button class="opt">Merged back onto the main line</button>
+  <button class="opt">Left behind, untouched on future runs</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-question" data-why-right="Head shares one host working directory between every concurrent agent (ADR 0018)."
+ data-why-wrong="The safest parallel strategy is a distinct named branch per agent.">
+  <p class="q">Which strategy is unsafe when two agents run at once?</p>
+  <button class="opt" data-correct="true">Head, sharing one host working directory</button>
+  <button class="opt">Branch, isolating each agent's own work</button>
+  <button class="opt">Merge-to-head, racing the final git merge</button>
+  <button class="opt">All three, across every single invocation</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-question" data-why-right="They inject the agent's branch and the host's active branch — true only for promptFile, not inline prompts."
+ data-why-wrong="These are branches, not models, iterations, or token accounting.">
+  <p class="q">What do <code>{{SOURCE_BRANCH}}</code> and <code>{{TARGET_BRANCH}}</code> inject?</p>
+  <button class="opt" data-correct="true">Agent branch and host active branch</button>
+  <button class="opt">Model names for the current provider</button>
+  <button class="opt">Number of iterations so far executed</button>
+  <button class="opt">Token budget remaining for this run</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+</div>
+
+<h2>Do it now</h2>
+<ol>
+  <li>Point <code>main.ts</code> at <code>branchStrategy: { type: "branch", branch: "agent/fix-42" }</code>.</li>
+  <li>Add <code>{{SOURCE_BRANCH}}</code> / <code>{{TARGET_BRANCH}}</code> to <code>.sandcastle/prompt.md</code>.</li>
+  <li>Run once; then edit the prompt slightly and run again — watch the worktree get reused.</li>
+  <li>Inspect: <code>git branch --list</code>, <code>git log agent/fix-42 --oneline</code>, and confirm your working directory stayed clean (<code>git status</code>).</li>
+</ol>
+
+<div class="callout key-idea">
+<span class="tag">Then what?</span>
+<p>You now have safe, repeatable, parallelizable agent runs. Next lesson puts two of them together into your mission's core loop: one agent implements on a branch, a second agent reviews the same branch — gated the way you want. That's the <code>createSandbox()</code> review pipeline.</p>
+</div>
+
+<section class="primary-source">
+<h2>Primary source</h2>
+<p>Read <a href="https://github.com/mattpocock/sandcastle#how-it-works">README — How it works</a> and <a href="https://github.com/mattpocock/sandcastle/blob/main/docs/adr/0003-reuse-worktree-by-default.md">ADR 0003</a>. The whole branch-strategy model compresses down to that pair of documents.</p>
+</section>
+
+<footer class="lesson-footer">
+  <p><strong>Stuck? Ask your teacher.</strong> Compare your <code>git status</code> / <code>git branch</code> output with me and I'll tell you which strategy your run actually used.</p>
+  <p>Previous: <a href="0001-your-first-run.html">Lesson 0001 — your first autonomous run</a> · Reference: <a href="../reference/sandbox-providers.html">providers &amp; branch strategies</a></p>
+</footer>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 0005 — Parallel Agents</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+<main>
+
+<header class="lesson-header">
+  <p class="lesson-number">Lesson 0005</p>
+  <h1>Parallel Agents</h1>
+  <p class="lesson-subtitle">The full factory — multiple issues, multiple agents, simultaneous branches.</p>
+</header>
+
+<h2>Recall before reading</h2>
+<p>From lesson 0002: why is <code>branchStrategy: { type: "branch" }</code> the only safe choice when running two agents at once? What do <code>head</code> and <code>merge-to-head</code> do that makes them dangerous?</p>
+
+<div class="callout key-idea">
+<span class="tag">Why this matters</span>
+<p>One agent is a demo. Three agents running on three issues simultaneously — each on its own branch, each in its own container, merging back when done — that's the autonomous factory you're building toward.</p>
+</div>
+
+<h2>Two parallelism patterns</h2>
+
+<h3>Pattern 1: <code>Promise.all</code> + <code>run()</code> — works with every provider</h3>
+<p>The simplest approach: fire off N <code>run()</code> calls in parallel, each on a distinct named branch. Each call spins up its own container — they're fully independent, no shared state:</p>
+
+<pre><code><span class="key">import</span> { run, opencode } from <span class="str">"@ai-hero/sandcastle"</span>;
+<span class="key">import</span> { docker } from <span class="str">"@ai-hero/sandcastle/sandboxes/docker"</span>;
+
+<span class="key">const</span> issues = [<span class="str">"42"</span>, <span class="str">"43"</span>, <span class="str">"44"</span>];
+
+<span class="key">const</span> results = <span class="key">await</span> Promise.all(
+  issues.map(issue <span class="key">=></span>
+    run({
+      agent: opencode(<span class="str">"opencode/big-pickle"</span>),
+      sandbox: docker(),
+      branchStrategy: { type: <span class="str">"branch"</span>, branch: <span class="str">`agent/fix-</span>${issue}<span class="str">`</span> },
+      promptFile: <span class="str">".sandcastle/implement.md"</span>,
+      promptArgs: { ISSUE_NUMBER: issue },
+      maxIterations: 5,
+    })
+  )
+);
+
+<span class="cmt">// All three agents ran simultaneously — three containers, three branches</span>
+results.forEach(r <span class="key">=></span> console.log(r.branch, r.commits.length));</code></pre>
+
+<p>No special provider required — this works with <code>opencode()</code>, <code>claudeCode()</code>, any provider. Each <code>run()</code> is a complete sandbox lifecycle.</p>
+
+<h3>Pattern 2: <code>fork()</code> — session-aware fan-out (Claude Code / Codex only)</h3>
+<p>A parent run explores the codebase, then forks independent child sessions from its context. Each child gets its own session JSONL and its own branch — but they share the parent's understanding of the code:</p>
+
+<pre><code><span class="key">import</span> { run, claudeCode } from <span class="str">"@ai-hero/sandcastle"</span>;
+<span class="key">import</span> { docker } from <span class="str">"@ai-hero/sandcastle/sandboxes/docker"</span>;
+
+<span class="key">const</span> parent = <span class="key">await</span> run({
+  agent: claudeCode(<span class="str">"claude-opus-4-8"</span>),
+  sandbox: docker(),
+  prompt: <span class="str">"Read the codebase and summarise the data model."</span>,
+});
+
+<span class="key">const</span> [reviewA, reviewB] = <span class="key">await</span> Promise.all([
+  parent.fork?.(<span class="str">"Review the migration plan"</span>, {
+    branchStrategy: { type: <span class="str">"branch"</span>, branch: <span class="str">"review-a"</span> },
+  }),
+  parent.fork?.(<span class="str">"Audit the auth layer"</span>, {
+    branchStrategy: { type: <span class="str">"branch"</span>, branch: <span class="str">"review-b"</span> },
+  }),
+]);</code></pre>
+
+<p><strong>Fork is session-only</strong> — it isolates the agent's JSONL conversation, not the branch or sandbox. You <em>must</em> give each child its own named branch via <code>branchStrategy</code>. <a href="https://github.com/mattpocock/sandcastle/blob/main/docs/adr/0018-fork-is-session-only.md">(ADR 0018)</a></p>
+
+<div class="callout note">
+<span class="tag"><code>fork()</code> requires a resumable provider</span>
+<p><code>fork()</code> is present only on results from providers with <code>sessionStorage</code>: <code>claudeCode()</code>, <code>codex()</code>, and <code>pi()</code>. It is <strong>not</strong> available on <code>opencode()</code> or <code>copilot()</code>. If you need parallel runs with <code>opencode()</code>, use Pattern 1 above — it works with every provider.</p>
+</div>
+
+<h2><code>createWorktree()</code> — when worktrees need to outlive sandboxes</h2>
+<p><code>createWorktree()</code> creates an independent worktree lifecycle separate from any sandbox. Use it when you want to run an <em>interactive</em> session first (human-in-the-loop), then hand the same worktree to a sandboxed AFK agent:</p>
+
+<pre><code><span class="key">import</span> { createWorktree } from <span class="str">"@ai-hero/sandcastle"</span>;
+
+<span class="key">await using</span> wt = <span class="key">await</span> createWorktree({
+  branchStrategy: { type: <span class="str">"branch"</span>, branch: <span class="str">"agent/fix-42"</span> },
+});
+
+<span class="cmt">// Interactive session first — explore the code, plan the fix</span>
+<span class="key">await</span> wt.interactive({
+  agent: opencode(<span class="str">"opencode/big-pickle"</span>),
+  prompt: <span class="str">"Explore the bug and plan a fix."</span>,
+});
+
+<span class="cmt">// Then hand the same worktree to a sandboxed AFK agent</span>
+<span class="key">await</span> wt.run({
+  agent: opencode(<span class="str">"opencode/big-pickle"</span>),
+  sandbox: docker(),
+  prompt: <span class="str">"Implement the fix you planned."</span>,
+  maxIterations: 5,
+});</code></pre>
+
+<p>The key difference: <code>wt.interactive()</code> defaults to <code>noSandbox()</code> — the agent runs on the host. Then <code>wt.run()</code> needs an explicit sandbox. The worktree persists between calls. <a href="https://github.com/mattpocock/sandcastle#createworktree--independent-worktree-lifecycle">(README)</a></p>
+
+<table>
+<thead>
+<tr><th>API</th><th>Lifecycle owner</th><th>Use case</th></tr>
+</thead>
+<tbody>
+<tr><td><code>run()</code></td><td>Automatic (sandbox created + destroyed)</td><td>One-shot, no setup needed</td></tr>
+<tr><td><code>createSandbox()</code></td><td>You (sandbox stays alive between calls)</td><td>Multiple agents on same branch, shared container state</td></tr>
+<tr><td><code>createWorktree()</code></td><td>You (worktree outlives sandbox)</td><td>Interactive session → AFK handoff, or split ownership</td></tr>
+</tbody>
+</table>
+
+<div class="callout note">
+<span class="tag">Split ownership</span>
+<p>When a sandbox is created via <code>wt.createSandbox()</code>, <code>sandbox.close()</code> tears down the <em>container only</em> — the worktree stays alive. <code>wt.close()</code> cleans up the worktree. This lets you create a sandbox, run an agent, tear down the container, then hand the same worktree to a new sandbox later.</p>
+</div>
+
+<h2>The <code>parallel-planner</code> template</h2>
+<p>Sandcastle ships a ready-made template for exactly this pattern. Run:</p>
+<pre><code>npx @ai-hero/sandcastle init --template parallel-planner-with-review</code></pre>
+<p>It scaffolds a <code>main.mts</code> that: (1) asks a planner agent which issues can be parallelized, (2) runs implement + review on each in parallel, (3) merges all branches back. You don't have to build it from scratch — start from the template and customize. <a href="https://github.com/mattpocock/sandcastle#templates">(README: templates)</a></p>
+
+<h2>Check yourself</h2>
+<div class="quiz">
+
+<div class="quiz-question" data-why-right="head shares one host working directory across all children; merge-to-head races git merge against the same HEAD. Only branch gives each agent its own isolated worktree. (ADR 0018)"
+ data-why-wrong="head and merge-to-head both have concurrency hazards — only branch isolates per-agent.">
+  <p class="q">Why must parallel agents use the <code>branch</code> strategy?</p>
+  <button class="opt" data-correct="true">head shares one host across all concurrent agents</button>
+  <button class="opt">branch creates isolated worktrees for every agent</button>
+  <button class="opt">merge-to-head keeps the host workspace clean between runs</button>
+  <button class="opt">all three strategies are equally safe for parallel</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-question" data-why-right="createWorktree() owns the git worktree lifecycle independently of any container. createSandbox() owns the container; the worktree is either created for it or outlives it."
+ data-why-wrong="Think about what 'independent' means: the worktree exists without needing a container to be alive.">
+  <p class="q">What does <code>createWorktree()</code> own that <code>createSandbox()</code> does not?</p>
+  <button class="opt" data-correct="true">the git worktree lifecycle independent of any containers</button>
+  <button class="opt">the container lifecycle independent of any git branches</button>
+  <button class="opt">the ability to run multiple agents in parallel</button>
+  <button class="opt">the sandbox cleanup logic when worktrees are dirty</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-question" data-why-right="fork() relies on the agent's native fork-session flag (--fork-session for Claude Code, codex exec fork for Codex). opencode and copilot have no session storage, so fork is not present on their results."
+ data-why-wrong="fork() depends on session storage, which only claudeCode, codex, and pi provide.">
+  <p class="q">Which agent provider supports <code>fork()</code> for fan-out from a parent?</p>
+  <button class="opt" data-correct="true">claudeCode and codex, but not opencode or copilot</button>
+  <button class="opt">opencode and copilot, but not claudeCode or codex</button>
+  <button class="opt">any provider that can support a completionSignal string</button>
+  <button class="opt">only the providers that accept a sandbox option</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-question" data-why-right="parallel-planner asks a planner which issues are independent, then runs them concurrently on separate branches. parallel-planner-with-review adds per-branch review before merging."
+ data-why-wrong="sequential-reviewer implements issues one by one; parallel-planner is the concurrent pattern.">
+  <p class="q">What pattern does the <code>parallel-planner</code> template implement?</p>
+  <button class="opt" data-correct="true">plans which issues to run concurrently then executes</button>
+  <button class="opt">implements each issue sequentially with a review step</button>
+  <button class="opt">picks one issue at a time, closes it</button>
+  <button class="opt">runs one agent on all issues at once</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+</div>
+
+<h2>Do it now</h2>
+<ol>
+  <li>Write a <code>.sandcastle/implement.md</code> prompt that uses <code>{{ISSUE_NUMBER}}</code> and <code>!`git log --oneline -5`</code>.</li>
+  <li>In <code>main.ts</code>, wire up <code>Promise.all</code> with two <code>run()</code> calls, each on a different issue and a different named branch (e.g. <code>agent/fix-1</code> and <code>agent/fix-2</code>).</li>
+  <li>Run it. While it's running, open another terminal and run <code>docker ps</code> — you should see two containers alive simultaneously.</li>
+  <li>After both complete, inspect: <code>git branch --list 'agent/*'</code> and <code>git log --oneline agent/fix-1</code>. Two branches, two independent commit histories.</li>
+</ol>
+
+<div class="callout key-idea">
+<span class="tag">Then what?</span>
+<p>You now have the full autonomous factory core: prompts with live context, implement-then-review on a branch, and parallel execution across issues. Next: structured output — extracting typed, validated data from agent responses so your orchestration logic can branch on what the agent actually decided.</p>
+</div>
+
+<section class="primary-source">
+<h2>Primary source</h2>
+<p>Read the <a href="https://github.com/mattpocock/sandcastle#createworktree--independent-worktree-lifecycle"><code>createWorktree()</code></a> section, <a href="https://github.com/mattpocock/sandcastle#session-fork">session fork</a>, and <a href="https://github.com/mattpocock/sandcastle/blob/main/docs/adr/0018-fork-is-session-only.md">ADR 0018</a>. The parallelism safety model compresses down to those three documents.</p>
+</section>
+
+<footer class="lesson-footer">
+  <p><strong>Stuck? Ask your teacher.</strong> If parallel runs are stepping on each other, the branch strategy is almost always the culprit — check your <code>branchStrategy</code> for each call.</p>
+  <p>Previous: <a href="0004-dynamic-prompts.html">Lesson 0004 — dynamic prompts</a> · Reference: <a href="../reference/worktree-api.html">worktree API</a> · <a href="../reference/prompt-system.html">prompt system</a></p>
+</footer>
+
+</main>
+</body>
+</html>

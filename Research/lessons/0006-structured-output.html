@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 0006 — Structured Output</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+<main>
+
+<header class="lesson-header">
+  <p class="lesson-number">Lesson 0006</p>
+  <h1>Structured Output</h1>
+  <p class="lesson-subtitle">Turn agent prose into typed, validated data your orchestrator can branch on.</p>
+</header>
+
+<h2>Recall before reading</h2>
+<p>From lesson 0005: what must an agent provider support to use <code>fork()</code>? Keep that answer in your head — the same constraint shows up again in this lesson, in a different shape.</p>
+
+<div class="callout key-idea">
+<span class="tag">Why this matters</span>
+<p>Until now your prompts end in commits — great for fixing issues, useless for <em>deciding</em>. When an agent needs to tell your pipeline "these three issues are independent, here's my plan for each," you can't parse prose reliably. Structured output makes the agent emit JSON in a known tag, and Sandcastle validates it against a schema before your code ever sees it.</p>
+</div>
+
+<h2>The pattern: prompt says the shape, schema guarantees it</h2>
+<p>You write `<result>…</result>` into the prompt as the container for the answer, and pass an <code>Output.object()</code> with a Standard Schema validator (Zod here — Valibot and ArkType work identically):</p>
+
+<pre><code><span class="key">import</span> { run, Output, claudeCode } from <span class="str">"@ai-hero/sandcastle"</span>;
+<span class="key">import</span> { docker } from <span class="str">"@ai-hero/sandcastle/sandboxes/docker"</span>;
+<span class="key">import</span> { z } from <span class="str">"zod"</span>;
+
+<span class="key">const</span> result = <span class="key">await</span> run({
+  agent: claudeCode(<span class="str">"claude-opus-4-8"</span>),
+  sandbox: docker(),
+  prompt: <span class="str">`Analyze the code. Output JSON inside &lt;result&gt; tags.
+    The result must match this schema:
+    { summary: string; score: number }
+  `</span>,
+  output: Output.object({
+    tag: <span class="str">"result"</span>,
+    schema: z.object({ summary: z.string(), score: z.number() }),
+  }),
+});
+
+console.log(result.output.summary); <span class="cmt">// typed as string</span>
+console.log(result.output.score);   <span class="cmt">// typed as number</span></code></pre>
+
+<p><code>Output.string({ tag })</code> is the lighter sibling — it returns the tag's contents trimmed, with no JSON parsing. <a href="https://github.com/mattpocock/sandcastle#structured-output">(README: structured output)</a></p>
+
+<h2>The rules</h2>
+<ul>
+<li><strong><code>maxIterations</code> must be <code>1</code></strong> (the default). Structured output only works on a single-iteration run.</li>
+<li><strong>The resolved prompt must contain the opening tag literal</strong> (e.g. the text <code>&lt;result&gt;</code>). If it's missing, extraction has nothing to anchor on.</li>
+<li>Validation happens against the schema before your code runs — a malformed payload never reaches you.</li>
+</ul>
+
+<div class="callout note">
+<span class="tag">Failure is loud</span>
+<p>When extraction or validation fails, <code>run()</code> throws a <code>StructuredOutputError</code> carrying <code>tag</code>, <code>rawMatched</code>, <code>cause</code>, <code>commits</code>, <code>branch</code>, <code>preservedWorktreePath</code> — and, when a session was captured, the <code>sessionId</code> you need to resume the run and ask for a corrected answer.</p>
+</div>
+
+<h2>Retries come with a provider constraint</h2>
+<p>Set <code>maxRetries: 2</code> and Sandcastle handles the loop for you: each retry resumes the <em>same session</em> and feeds back a token-efficient description of the validation error, so the agent re-emits a corrected tag without redoing its work:</p>
+
+<pre><code><span class="key">const</span> result = <span class="key">await</span> run({
+  agent: claudeCode(<span class="str">"claude-opus-4-8"</span>),
+  sandbox: docker(),
+  prompt: <span class="str">"Analyze the code and emit JSON inside &lt;result&gt; tags."</span>,
+  output: Output.object({
+    tag: <span class="str">"result"</span>,
+    schema: z.object({ summary: z.string(), score: z.number() }),
+    maxRetries: 2,
+  }),
+});</code></pre>
+
+<div class="callout warning">
+<span class="tag">Not every provider can retry</span>
+<p>Retries resume the agent session, so <code>maxRetries &gt; 0</code> only works with providers that support session resumption — <code>claudeCode()</code>, <code>codex()</code>, <code>pi()</code>. Calling it against <code>opencode()</code>, <code>copilot()</code>, or <code>cursor()</code> <strong>throws immediately</strong>. This is the same constraint you saw shape <code>fork()</code> in lesson 0005: session control is a resumable-provider superpower.</p>
+</div>
+
+<p>If you're on a resumable provider and want a custom retry loop (a different feedback prompt, model rotation), drive it yourself with <code>resumeSession</code>: catch the <code>StructuredOutputError</code>, read its <code>sessionId</code>, and re-run asking the agent to re-emit inside the tag.</p>
+
+<h2>Where you've already seen this: the planner</h2>
+<p>The <code>parallel-planner</code> templates in <code>sandcastle init</code> import Zod for their <code>&lt;plan&gt;</code> output schema — the planner agent emits a validated plan (which issues are parallelizable, in what order), and <code>main.mts</code> branches on <code>result.output</code> to decide what to run where. Structured output isn't a toy: it's how the factory decides its own work. <a href="https://github.com/mattpocock/sandcastle#templates">(README: templates)</a></p>
+
+<h2>Check yourself</h2>
+<div class="quiz">
+
+<div class="quiz-question" data-why-right="Output.object() parses the tag's contents and validates them against the schema, returning typed data on result.output."
+ data-why-wrong="It's the parsed, validated payload — not raw stdout, a signal, or the commit list.">
+  <p class="q">What does <code>Output.object()</code> return on <code>result.output</code>?</p>
+  <button class="opt" data-correct="true">schema-validated typed data extracted from the tag</button>
+  <button class="opt">all unparsed raw stdout from the agent process</button>
+  <button class="opt">the completion signal text that matched this run</button>
+  <button class="opt">a list of all commits the agent made</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-question" data-why-right="maxIterations must be exactly one (the default). Structured output deliberately only works on a single-iteration run."
+ data-why-wrong="It's the iteration count that constrains structured output, not the sandbox, the agent, or the prompt source.">
+  <p class="q">Which constraint applies when using <code>Output.object()</code>?</p>
+  <button class="opt" data-correct="true">maxIterations must be exactly one, which is default</button>
+  <button class="opt">the sandbox must use an isolated provider only</button>
+  <button class="opt">the agent provider must always support session resume</button>
+  <button class="opt">the prompt must use promptFile rather than prompt</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-question" data-why-right="StructuredOutputError is thrown when extraction or schema validation of the tag's contents fails."
+ data-why-wrong="The error is about the output payload, not container startup, commit counts, or completion signals.">
+  <p class="q">When does <code>run()</code> throw <code>StructuredOutputError</code>?</p>
+  <button class="opt" data-correct="true">when extraction or validation of the output fails</button>
+  <button class="opt">when the sandbox container fails to start up</button>
+  <button class="opt">when the agent makes zero commits in total</button>
+  <button class="opt">when the completion signal never appears in stdout</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-question" data-why-right="maxRetries resumes the agent's session between attempts, and only resumable providers (claudeCode, codex, pi) can do that. opencode can't — calling run() with maxRetries throws immediately."
+ data-why-wrong="Retries are about session resumption, not image building, sandboxing, or XML emission.">
+  <p class="q">Why can't <code>opencode()</code> use <code>maxRetries</code> for structured output?</p>
+  <button class="opt" data-correct="true">maxRetries resumes the agent session, needing resumable providers</button>
+  <button class="opt">opencode itself cannot build any custom container images</button>
+  <button class="opt">structured output requires a fully sandboxed environment here</button>
+  <button class="opt">the provider cannot emit the required XML tags</button>
+  <p class="quiz-feedback"></p>
+</div>
+
+</div>
+
+<h2>Do it now</h2>
+<ol>
+  <li>Write a prompt that asks the agent to analyze your repo and emit JSON inside <code>&lt;result&gt;</code> tags with a shape you define.</li>
+  <li>Add an <code>output: Output.object({ tag: "result", schema: z.object({ ... }) })</code> to a <code>run()</code> call. Split the schema's shape into the prompt so the agent knows what to emit.</li>
+  <li>Run it and <code>console.log(result.output)</code> — you should get clean typed fields, not prose.</li>
+  <li>Deliberately break the schema (e.g. ask for a <code>number</code> you know the agent will emit as a string) and catch the <code>StructuredOutputError</code>. Read its fields — including <code>rawMatched</code>.</li>
+</ol>
+
+<div class="callout key-idea">
+<span class="tag">Then what?</span>
+<p>You've now met every mechanic Sandcastle offers: providers, strategies, prompts, sessions, parallel runs, structured output. The final lesson assembles them all into one working autonomous pipeline — your own factory, planned, executed, and merged without a human in the loop.</p>
+</div>
+
+<section class="primary-source">
+<h2>Primary source</h2>
+<p>Read the <a href="https://github.com/mattpocock/sandcastle#structured-output">structured output section</a> of the README and <a href="https://github.com/mattpocock/sandcastle/blob/main/docs/adr/0010-structured-output.md">ADR 0010</a>, which records the design rationale — including why the tag-and-schema approach was chosen over alternatives.</p>
+</section>
+
+<footer class="lesson-footer">
+  <p><strong>Stuck? Ask your teacher.</strong> If extraction keeps failing, paste your prompt and the <code>rawMatched</code> from the error — the tag almost never matches the shape the agent actually emitted.</p>
+  <p>Previous: <a href="0005-parallel-agents.html">Lesson 0005 — parallel agents</a> · Reference: <a href="../reference/prompt-system.html">prompt system</a> · <a href="../reference/worktree-api.html">worktree API</a></p>
+</footer>
+
+</main>
+</body>
+</html>
