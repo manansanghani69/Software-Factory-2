@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reference — From Idea to Implementation Tickets</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+/* Page-specific layout for the workflow map. The shared Sandcastle stylesheet
+   owns the typography, colours, and print treatment. */
+.workflow-map {
+  display: grid;
+  gap: 0.7rem;
+  margin: 1.4rem 0 1.8rem;
+}
+
+.workflow-stage {
+  display: grid;
+  grid-template-columns: 3.4rem minmax(0, 1fr) minmax(9rem, 0.7fr);
+  gap: 0.8rem;
+  align-items: start;
+  padding: 0.9rem 1rem;
+  background: var(--paper-alt);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+
+.workflow-stage.gate { border-left: 4px solid var(--accent); }
+
+.stage-number {
+  color: var(--accent);
+  font: 700 0.8rem/1 var(--sans);
+  letter-spacing: 0.08em;
+  padding-top: 0.3rem;
+}
+
+.workflow-stage h3 { margin: 0; }
+.workflow-stage p { margin: 0.25rem 0 0; font-size: 0.9rem; }
+.stage-output { font-size: 0.86rem; color: var(--ink-soft); }
+.stage-output strong {
+  display: block;
+  color: var(--ink);
+  font: 700 0.67rem var(--sans);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.branch-grid, .artifact-grid, .gate-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1rem 0 1.4rem;
+}
+
+.artifact-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+.branch, .artifact-card, .gate-card {
+  padding: 1rem;
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+
+.branch h3, .artifact-card h3, .gate-card h3 { margin-top: 0; }
+.branch p:last-child, .artifact-card p:last-child, .gate-card p:last-child { margin-bottom: 0; }
+
+.branch.decision { border-top: 4px solid var(--accent); }
+.branch.execution { border-top: 4px solid var(--good); }
+
+.pill {
+  display: inline-block;
+  padding: 0.16rem 0.45rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  font: 700 0.64rem var(--sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pill.core { color: var(--accent-dark); border-color: #d6ad9b; }
+.pill.conditional { color: var(--note); border-color: #b8c6dc; }
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0.8rem 0 1rem;
+}
+
+.filter-bar button {
+  padding: 0.35rem 0.65rem;
+  background: var(--paper-alt);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  color: var(--ink);
+  cursor: pointer;
+  font: 700 0.72rem var(--sans);
+}
+
+.filter-bar button:hover, .filter-bar button.selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.artifact-card.is-hidden { display: none; }
+
+.tree {
+  margin: 1rem 0 1.4rem;
+  padding: 1rem 1rem 1rem 1.4rem;
+  background: var(--code-bg);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  line-height: 1.7;
+}
+
+.tree ul { list-style: none; margin: 0; padding-left: 1.25rem; }
+.tree > ul { padding-left: 0; }
+.tree li { margin: 0; position: relative; }
+.tree li::before { content: "├─ "; color: var(--accent); }
+.tree li:last-child::before { content: "└─ "; }
+.tree .leaf { color: var(--good); }
+
+.phase-loop {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.phase-step {
+  padding: 0.8rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--paper-alt);
+}
+
+.phase-step strong {
+  display: block;
+  margin-bottom: 0.2rem;
+  font: 700 0.7rem var(--sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.phase-step p { margin: 0; font-size: 0.9rem; }
+
+.readiness {
+  padding: 1rem 1.1rem;
+  background: #eef4ef;
+  border: 1px solid #c5d7c9;
+  border-radius: 6px;
+}
+
+.readiness label {
+  display: block;
+  margin: 0.55rem 0;
+  font-size: 0.92rem;
+}
+
+.readiness input { margin-right: 0.5rem; accent-color: var(--good); }
+.readiness-result { margin: 0.8rem 0 0; font-weight: 700; color: var(--bad); }
+.readiness-result.ready { color: var(--good); }
+
+.status-table td:first-child { white-space: nowrap; }
+
+.trace-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 1rem 0 1.4rem;
+  font: 700 0.74rem var(--sans);
+}
+
+.trace-line span {
+  padding: 0.45rem 0.55rem;
+  background: var(--paper-alt);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+}
+
+.trace-line b { color: var(--accent); }
+
+details {
+  margin: 0.8rem 0;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  background: var(--paper-alt);
+}
+
+summary { cursor: pointer; font-weight: 700; }
+
+@media (max-width: 38rem) {
+  .workflow-stage { grid-template-columns: 2.7rem 1fr; }
+  .stage-output { grid-column: 2; }
+  .branch-grid, .artifact-grid, .gate-grid, .phase-loop { grid-template-columns: 1fr; }
+}
+
+@media print {
+  .filter-bar, .readiness input { display: none; }
+  .artifact-card.is-hidden { display: block; }
+}
+</style>
+</head>
+<body>
+<main>
+
+<header class="lesson-header">
+  <p class="lesson-number">Reference • Decision system</p>
+  <h1>From Idea to Implementation Tickets</h1>
+  <p class="lesson-subtitle">A decision-first workflow for Wayfinder, documentation, and Sandcastle.</p>
+</header>
+
+<div class="callout key-idea">
+  <span class="tag">The governing rule</span>
+  <p><strong>Wayfinder makes the route clear. Sandcastle travels the route.</strong> The workflow below exists to make scope, behavior, trade-offs, dependencies, and acceptance criteria explicit before an implementation ticket is created.</p>
+</div>
+
+<h2>What this workflow is for</h2>
+<p>Use it for a greenfield project, a large feature, or a phase of an existing product. It accepts an input at any level of clarity—from a sentence of intent to a detailed PRD—and turns it into a bounded, reviewable set of implementation tickets.</p>
+<p>The destination is not “a complete plan for the rest of time.” It is an execution-ready packet for the next phase, while later work remains visible as deliberate fog rather than false certainty.</p>
+
+<h2>The complete route</h2>
+<div class="workflow-map" aria-label="Ten-stage workflow">
+  <div class="workflow-stage">
+    <div class="stage-number">01</div>
+    <div><h3>Intake and frame</h3><p>Normalize the starting material into a project brief: who needs what, why now, constraints, and non-goals.</p></div>
+    <div class="stage-output"><strong>Creates</strong>Project brief</div>
+  </div>
+  <div class="workflow-stage gate">
+    <div class="stage-number">02</div>
+    <div><h3>Define the outcome</h3><p>Choose measurable success signals and the user or business outcome the work must change.</p></div>
+    <div class="stage-output"><strong>Gate</strong>Outcome approval</div>
+  </div>
+  <div class="workflow-stage">
+    <div class="stage-number">03</div>
+    <div><h3>Discover and research</h3><p>Resolve facts through research, prototypes, codebase inspection, or stakeholder conversations. Record evidence, not guesses.</p></div>
+    <div class="stage-output"><strong>Creates</strong>Research findings and decision tickets</div>
+  </div>
+  <div class="workflow-stage">
+    <div class="stage-number">04</div>
+    <div><h3>Model the domain</h3><p>Agree on the nouns, relationships, states, and edge cases. Capture the vocabulary in the glossary.</p></div>
+    <div class="stage-output"><strong>Creates</strong>Context and glossary</div>
+  </div>
+  <div class="workflow-stage gate">
+    <div class="stage-number">05</div>
+    <div><h3>Slice the scope into phases</h3><p>Choose a meaningful vertical slice. Separate the next phase from later outcomes and place unclear territory in the fog.</p></div>
+    <div class="stage-output"><strong>Gate</strong>Phase-scope approval</div>
+  </div>
+  <div class="workflow-stage">
+    <div class="stage-number">06</div>
+    <div><h3>Choose the document set</h3><p>Run the change-dimension checklist. Create the core documents and only the conditional artifacts that earn their place.</p></div>
+    <div class="stage-output"><strong>Creates</strong>Document manifest</div>
+  </div>
+  <div class="workflow-stage">
+    <div class="stage-number">07</div>
+    <div><h3>Shape behavior and solution</h3><p>Define user-visible behavior, designs, contracts, data changes, quality expectations, and meaningful trade-offs.</p></div>
+    <div class="stage-output"><strong>Creates</strong>Specs, designs, contracts, ADRs</div>
+  </div>
+  <div class="workflow-stage">
+    <div class="stage-number">08</div>
+    <div><h3>Map the work</h3><p>Build an arbitrary-depth scope tree, identify dependencies, and project the leaf work into the issue tracker.</p></div>
+    <div class="stage-output"><strong>Creates</strong>Scope map and ticket DAG</div>
+  </div>
+  <div class="workflow-stage gate">
+    <div class="stage-number">09</div>
+    <div><h3>Run the readiness review</h3><p>Check that every implementation ticket is traceable, testable, ordered, and free of hidden decisions.</p></div>
+    <div class="stage-output"><strong>Gate</strong>Execution-readiness approval</div>
+  </div>
+  <div class="workflow-stage">
+    <div class="stage-number">10</div>
+    <div><h3>Create and hand off tickets</h3><p>Create the approved implementation tickets with their full context. Sandcastle may now implement them.</p></div>
+    <div class="stage-output"><strong>Hands off</strong>Execution packet</div>
+  </div>
+</div>
+
+<div class="callout note">
+  <span class="tag">Three approval boundaries</span>
+  <p>Human approval is explicit at the outcome gate, the phase-scope gate, and the execution-readiness gate. Agents can research, challenge, draft, and assemble evidence; they do not silently lock the product decision.</p>
+</div>
+
+<h2>Two maps, one route</h2>
+<p>Wayfinder’s map and the execution scope map solve different problems. Keeping them distinct prevents a decision question from being mistaken for a build task.</p>
+<div class="branch-grid">
+  <section class="branch decision">
+    <span class="pill core">Decision map</span>
+    <h3>Wayfinder</h3>
+    <p>Tracks the questions whose answers make the route clear. Its tickets are research, prototype, grilling, or prerequisite task work.</p>
+    <p><strong>Completion:</strong> no unresolved decision remains on the route to the next phase.</p>
+  </section>
+  <section class="branch execution">
+    <span class="pill core">Scope map</span>
+    <h3>Project delivery tree</h3>
+    <p>Tracks the approved decomposition from project to phase, outcome, capability, feature, story, and implementation task.</p>
+    <p><strong>Completion:</strong> every next-phase leaf is an execution-ready ticket or an intentionally deferred decision.</p>
+  </section>
+</div>
+
+<p>The repository’s scope map is the canonical arbitrary-depth hierarchy. The issue tracker is a projection: it may use native parent-child relationships where available, but it must not be allowed to erase intermediate levels.</p>
+
+<h2>Rolling phases</h2>
+<p>Planning does not stop the moment phase one begins. It moves like a wave: implementation proceeds on a locked slice while the next slice becomes clearer.</p>
+<div class="phase-loop">
+  <div class="phase-step"><strong>Phase N — locked</strong><p>Documents approved, tickets ready, Sandcastle can execute.</p></div>
+  <div class="phase-step"><strong>Phase N+1 — shaping</strong><p>Research and decision tickets are active; rough scope may be drafted.</p></div>
+  <div class="phase-step"><strong>Later — fog</strong><p>Known direction, not yet a precise question. Do not pre-slice it into fake tickets.</p></div>
+</div>
+<div class="callout warning">
+  <span class="tag">Do not over-plan</span>
+  <p>Future phases can have intent, boundaries, and visible unknowns. They should not have implementation tickets that depend on decisions nobody has made yet.</p>
+</div>
+
+<h2>Document manifest</h2>
+<p>Every phase gets the core set. Conditional artifacts are triggered by the shape of the change. Use the filters to see which documents belong to a particular concern.</p>
+<div class="filter-bar" role="group" aria-label="Filter document types">
+  <button class="selected" type="button" data-filter="all">All</button>
+  <button type="button" data-filter="core">Core</button>
+  <button type="button" data-filter="behavior">Behavior</button>
+  <button type="button" data-filter="design">Design</button>
+  <button type="button" data-filter="contract">Contract</button>
+  <button type="button" data-filter="risk">Risk</button>
+</div>
+<div class="artifact-grid">
+  <article class="artifact-card" data-area="core"><span class="pill core">Core</span><h3>Project brief</h3><p>Outcome, users, constraints, non-goals, and the reason this effort exists.</p></article>
+  <article class="artifact-card" data-area="core"><span class="pill core">Core</span><h3>Context and glossary</h3><p>Canonical terms, relationships, states, and edge-case meanings without implementation detail.</p></article>
+  <article class="artifact-card" data-area="core"><span class="pill core">Core</span><h3>Scope map</h3><p>Arbitrary-depth hierarchy with phase boundaries, dependencies, and the fog of war.</p></article>
+  <article class="artifact-card" data-area="core"><span class="pill core">Core</span><h3>Document index</h3><p>Required, created, skipped, stale, and superseded artifacts with reasons and links.</p></article>
+  <article class="artifact-card" data-area="behavior"><span class="pill conditional">Behavior</span><h3>Feature specification</h3><p>Required for non-trivial behavior, state transitions, rules, or edge cases.</p></article>
+  <article class="artifact-card" data-area="behavior"><span class="pill conditional">Behavior</span><h3>Acceptance model</h3><p>Required for every execution slice. States what can be checked and how completion is proved.</p></article>
+  <article class="artifact-card" data-area="design"><span class="pill conditional">Design</span><h3>Design document</h3><p>Required when users interact with a new or materially changed interface, flow, or content model.</p></article>
+  <article class="artifact-card" data-area="contract"><span class="pill conditional">Contract</span><h3>API or event contract</h3><p>Required when an internal or external boundary changes. Include examples and failure behavior.</p></article>
+  <article class="artifact-card" data-area="contract"><span class="pill conditional">Data</span><h3>Data and migration plan</h3><p>Required when persistent data, ownership, invariants, or migration order changes.</p></article>
+  <article class="artifact-card" data-area="risk"><span class="pill conditional">Risk</span><h3>Security and privacy assessment</h3><p>Required for identity, permissions, sensitive data, trust boundaries, or abuse-sensitive behavior.</p></article>
+  <article class="artifact-card" data-area="risk"><span class="pill conditional">Risk</span><h3>Rollout and operations plan</h3><p>Required when deployment, reliability, observability, support, or rollback behavior changes.</p></article>
+  <article class="artifact-card" data-area="core"><span class="pill core">Core</span><h3>Readiness record</h3><p>Records the final checklist, approver, date, known residual risk, and the ticket set authorized.</p></article>
+</div>
+
+<details>
+  <summary>What makes a document trustworthy?</summary>
+  <p>Every document has an ID, type, status, owner, phase, parent, dependencies, supersession links, and last-updated date. Its body states the decision or contract, not just a stream of discussion. If a document is intentionally skipped, the document index says why.</p>
+</details>
+
+<h2>Arbitrary-depth ticket hierarchy</h2>
+<p>The hierarchy is a tree for decomposition and a graph for dependencies. A ticket can have one structural parent while being blocked by several other tickets.</p>
+<div class="tree" aria-label="Example ticket hierarchy">
+<ul>
+  <li>Project: Shared workspace
+    <ul>
+      <li>Phase 1: Invite members
+        <ul>
+          <li>Outcome: Owners can add collaborators
+            <ul>
+              <li>Capability: Membership management
+                <ul>
+                  <li>Feature: Email invitation
+                    <ul>
+                      <li>Story: Invitee receives a usable invitation</li>
+                      <li class="leaf">Task: Add invitation endpoint</li>
+                      <li class="leaf">Task: Add invitation acceptance flow</li>
+                      <li class="leaf">Task: Add expiry and replay tests</li>
+                    </ul>
+                  </li>
+                </ul>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+</div>
+<p>Decision tickets sit beside this tree and unblock it. For example, “What happens when an invitation is resent?” is a grilling ticket. Once answered, the feature spec and acceptance model can be updated; only then do the leaf tasks become ready.</p>
+
+<h2>Ticket contract</h2>
+<p>An implementation ticket is a compact execution packet, not a pointer to an unexplained conversation.</p>
+<pre><code>id: EXEC-INVITE-01
+type: execution
+status: ready
+parent: feature/email-invitation
+depends_on: [DEC-INVITE-EXPIRY]
+source_docs: [feature/email-invitation/spec.md, feature/email-invitation/api.md]
+
+## Objective
+Allow an owner to send an invitation to a collaborator.
+
+## Scope
+- Add the invitation operation and its validation.
+- Do not change role editing or bulk invitations.
+
+## Behavior
+- A valid owner can invite an email address.
+- A duplicate active invitation is handled according to the approved spec.
+- Expired invitations cannot be accepted.
+
+## Acceptance
+- [ ] Valid invitation is created and observable.
+- [ ] Unauthorized caller is rejected.
+- [ ] Expired invitation cannot be accepted.
+- [ ] Automated tests cover the listed cases.
+
+## Validation
+Run the project test command and the focused invitation test suite.</code></pre>
+
+<h2>States and gates</h2>
+<table class="status-table">
+<thead><tr><th>Object</th><th>Lifecycle</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td>Document</td><td><code>draft → in-review → approved → stale → retired</code></td><td>Approved content can authorize work; stale content cannot.</td></tr>
+<tr><td>Phase</td><td><code>discovery → shaping → ready → implementing → complete</code></td><td>A phase is ready only after its execution-readiness gate.</td></tr>
+<tr><td>Ticket</td><td><code>open → claimed → blocked → ready → in-progress → done</code></td><td><code>blocked</code> describes dependency or decision pressure, not failure.</td></tr>
+<tr><td>Side states</td><td><code>out-of-scope</code>, <code>superseded</code>, <code>cancelled</code></td><td>These preserve history without pretending the work remains active.</td></tr>
+</tbody>
+</table>
+
+<h2>Execution-readiness check</h2>
+<p>Use this small interactive check when reviewing a phase. The real readiness record belongs in the repository and links to the approved evidence.</p>
+<div class="readiness">
+  <label><input type="checkbox"> The phase outcome and non-goals are approved.</label>
+  <label><input type="checkbox"> The domain terms and important edge cases are resolved.</label>
+  <label><input type="checkbox"> Every required document exists or has an explicit skip reason.</label>
+  <label><input type="checkbox"> Every implementation ticket has testable acceptance criteria.</label>
+  <label><input type="checkbox"> Dependencies, conflicts, and execution waves are known.</label>
+  <label><input type="checkbox"> A human has approved the ticket set for implementation.</label>
+  <p class="readiness-result" aria-live="polite">Not ready — complete every check before creating execution tickets.</p>
+</div>
+
+<h2>Traceability</h2>
+<p>Every implementation decision should be explainable by walking backward from the ticket to the outcome.</p>
+<div class="trace-line" aria-label="Traceability chain">
+  <span>Outcome</span><b>→</b><span>Scope node</span><b>→</b><span>Document</span><b>→</b><span>Acceptance</span><b>→</b><span>Execution ticket</span><b>→</b><span>Sandcastle run</span>
+</div>
+<p>The reverse path matters too: if an approved document changes, the workflow can find affected tickets, mark them stale, and reopen only the impacted subtree.</p>
+
+<h2>Failure and change recovery</h2>
+<ol class="steps">
+  <li><strong>Stop the affected subtree.</strong> Do not restart unrelated work or silently continue with stale assumptions.</li>
+  <li><strong>Record the new uncertainty.</strong> Create a precise Wayfinder decision ticket, or place it in the fog if it is not yet precise enough.</li>
+  <li><strong>Resolve and update evidence.</strong> Change the glossary, spec, design, contract, or ADR that carries the decision.</li>
+  <li><strong>Recompute impact.</strong> Mark affected documents and tickets stale, then recalculate dependencies and waves.</li>
+  <li><strong>Re-run the readiness gate.</strong> Create or reissue execution tickets only for the corrected subtree.</li>
+</ol>
+<div class="callout good">
+  <span class="tag">The stopping condition</span>
+  <p>Planning for a phase is complete when every in-scope implementation ticket is ready, dependencies are ordered, required documents exist, and remaining uncertainty is either assigned to a later phase or explicitly out of scope.</p>
+</div>
+
+<h2>Minimal templates</h2>
+<details>
+  <summary>Decision ticket</summary>
+  <pre><code>## Question
+One decision or investigation that is answerable now.
+
+## Why it matters
+Which phase, document, or ticket is blocked by this answer?
+
+## Evidence needed
+Research, prototype, scenario, or conversation required.
+
+## Resolution
+Filled when the ticket closes; link the durable artifact.</code></pre>
+</details>
+<details>
+  <summary>Document metadata</summary>
+  <pre><code>id: FEAT-INVITE-SPEC
+type: feature-spec
+status: approved
+owner: product-design
+phase: phase-01
+parent: feature/email-invitation
+depends_on: [DEC-INVITE-EXPIRY]
+supersedes: null
+last_updated: 2026-09-28</code></pre>
+</details>
+
+<div class="primary-source">
+  <h2>How this relates to the existing Sandcastle lessons</h2>
+  <p><a href="../lessons/0008-spec-stage.html">Lesson 0008 — The Spec Stage</a> explains dependency-aware planning and execution waves. This guide moves upstream of that lesson: it defines how a vague project becomes a trustworthy spec stage and a set of tickets in the first place.</p>
+  <p>See also the <a href="../CONTEXT.md">Sandcastle planning glossary</a> and <a href="../docs/adr/0001-decision-first-inception-before-sandcastle.md">ADR 0001</a>.</p>
+</div>
+
+<footer class="lesson-footer">
+  <p><strong>Use the route as a checklist, not a ceremony.</strong> The workflow should make decisions visible, keep uncertainty honest, and stop Sandcastle from being asked to invent product behavior while implementing it.</p>
+</footer>
+</main>
+
+<script>
+(() => {
+  const buttons = document.querySelectorAll("[data-filter]");
+  const cards = document.querySelectorAll(".artifact-card");
+  buttons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const filter = button.dataset.filter;
+      buttons.forEach((item) => item.classList.toggle("selected", item === button));
+      cards.forEach((card) => {
+        card.classList.toggle("is-hidden", filter !== "all" && card.dataset.area !== filter);
+      });
+    });
+  });
+
+  const checks = document.querySelectorAll(".readiness input[type='checkbox']");
+  const result = document.querySelector(".readiness-result");
+  const updateReadiness = () => {
+    const ready = [...checks].every((check) => check.checked);
+    result.textContent = ready
+      ? "Ready — the phase can create its implementation tickets."
+      : "Not ready — complete every check before creating execution tickets.";
+    result.classList.toggle("ready", ready);
+  };
+  checks.forEach((check) => check.addEventListener("change", updateReadiness));
+})();
+</script>
+</body>
+</html>
