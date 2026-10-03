@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Project Definition System — Idea to implementation tickets</title>
+<style>
+:root{--paper:#f6f3ec;--panel:#fffcf6;--ink:#202c2c;--soft:#526160;--line:#d2d8cf;--accent:#16655d;--tint:#e4eee6;--gate:#8a472c;--gate-bg:#f4e6d8;--mono:ui-monospace,SFMono-Regular,Consolas,monospace;--sans:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:2rem}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.65 var(--sans)}a{color:var(--accent);text-underline-offset:3px}a:hover{text-decoration-thickness:2px}button,input{font:inherit}button{cursor:pointer}button:focus-visible,a:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:4px}button:disabled{cursor:default;opacity:.45}header,main,footer{max-width:1180px;margin:auto;padding:0 32px}header{padding-top:60px;padding-bottom:36px;border-bottom:1px solid var(--line)}.eyebrow{color:var(--accent);font:600 12px/1.4 var(--mono);letter-spacing:.1em;text-transform:uppercase}.hero{display:grid;grid-template-columns:1.6fr 1fr;gap:52px;align-items:end}h1{font:400 clamp(2.5rem,5vw,4.5rem)/1.08 Georgia,"Times New Roman",serif;letter-spacing:-.04em;margin:16px 0 22px}h2{font:400 clamp(1.8rem,3vw,2.5rem)/1.2 Georgia,"Times New Roman",serif;margin:0 0 16px}h3{font-size:1.05rem;margin:0 0 10px}p{margin:0 0 14px}.intro{font-size:1.1rem;max-width:650px}.aside-note{border-left:3px solid var(--accent);padding-left:20px;color:var(--soft)}.aside-note strong{display:block;color:var(--ink);margin-bottom:9px}nav.top{display:flex;flex-wrap:wrap;gap:20px;margin-top:30px;font-size:.9rem}section{padding:44px 0;border-bottom:1px solid var(--line)}.section-head{display:flex;justify-content:space-between;gap:24px;align-items:baseline}.section-head p{max-width:540px;color:var(--soft)}.route{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:22px 0}.route button{text-align:left;border:1px solid var(--line);background:var(--panel);padding:14px;color:var(--ink);min-height:92px;border-radius:3px}.route button:hover{border-color:var(--accent)}.route button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--panel)}.route small{display:block;font:12px var(--mono);margin-bottom:7px}.route span{display:block;font-weight:600}.route em{display:block;font-size:.76rem;font-style:normal;margin-top:4px}.stage{background:var(--panel);border:1px solid var(--line);padding:28px;border-radius:3px}.stage-title{display:flex;justify-content:space-between;align-items:start;gap:20px}.stage-title h3{font:400 1.7rem/1.25 Georgia,serif}.stage-number{font:12px var(--mono);color:var(--soft);display:block;margin-bottom:8px}.gate-badge{background:var(--gate-bg);color:var(--gate);padding:5px 10px;white-space:nowrap;font-size:.8rem;border-radius:3px}.columns{display:grid;grid-template-columns:1fr 1fr;gap:28px}.stage-block{margin-top:20px}.stage-block h4{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--soft);margin:0 0 8px}.stage ul{margin:0;padding-left:19px}.stage li{margin-bottom:6px}.exit{margin-top:24px;border-top:1px solid var(--line);padding-top:18px}.exit p{margin-bottom:6px}.pager{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:20px}.pager button,.small-button{background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:8px 14px;color:var(--ink)}.muted{color:var(--soft)}.pager span{font-size:.85rem}.gate-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:26px}.gate-card{border-top:3px solid var(--gate);background:var(--panel);padding:16px}.gate-card p{font-size:.9rem;margin:0}.gate-card small{font:11px var(--mono);display:block;color:var(--gate);margin-bottom:8px}.annotation{padding:16px 20px;margin-top:22px;background:var(--tint);border-left:3px solid var(--accent)}.annotation p:last-child{margin:0}.two-maps{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:22px}.map{background:var(--panel);padding:24px;border:1px solid var(--line)}.map .label{font:12px var(--mono);color:var(--accent);margin-bottom:10px}.tree{font:14px/1.9 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;background:var(--paper);padding:18px;margin:18px 0}.map p:last-child{margin:0}.map ul{padding-left:20px}.trace{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:22px 0}.trace span{background:var(--panel);border:1px solid var(--line);padding:7px 10px;font-size:.85rem}.trace b{color:var(--accent)}.doc-explorer{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:24px}.choices{border:1px solid var(--line);padding:20px;background:var(--panel);margin:0}.choices legend{padding:0 8px;font-weight:600}.choices label{display:flex;align-items:start;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}.choices label:last-child{border:0}.choices input{margin-top:7px;accent-color:var(--accent)}.doc-output{background:var(--tint);padding:24px}.doc-output h3{margin-bottom:12px}.doc-output ul{padding-left:20px;margin-top:8px}.doc-output li{margin:8px 0}.core{border-top:1px solid var(--line);padding-top:14px;margin-top:18px;font-size:.9rem}.lanes{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin:24px 0}.lane{background:var(--panel);border:1px solid var(--line);padding:22px}.lane small{font:12px var(--mono);color:var(--accent)}.lane h3{font:400 1.4rem Georgia,serif;margin:12px 0}.lane p{font-size:.9rem}.lane p:last-child{margin:0}.loop{border-left:3px solid var(--gate);padding-left:20px;margin-top:22px}.skill-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.skill-group{border:1px solid var(--line);background:var(--panel);padding:22px}.skill-group code{font-size:.82rem}.skill-group ol{padding-left:22px}.skill-group li{padding:5px 0}.skill-group p:last-child{margin:0}code{font-family:var(--mono);overflow-wrap:anywhere}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;margin:20px 0;font-size:.9rem}th,td{text-align:left;vertical-align:top;padding:13px 10px;border-bottom:1px solid var(--line)}th{color:var(--soft);font-size:.8rem}details{padding:16px 0;border-bottom:1px solid var(--line)}summary{cursor:pointer;font-weight:600}details p{margin:14px 0 0}footer{padding-top:26px;padding-bottom:45px;color:var(--soft);font-size:.9rem}.footer-links{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:14px}.skip{position:absolute;left:-10000px}.skip:focus{left:16px;top:10px;background:var(--panel);padding:8px;z-index:3}
+@media(prefers-color-scheme:dark){:root{--paper:#172322;--panel:#1d2d2b;--ink:#eee9dd;--soft:#b6c3ba;--line:#425450;--accent:#8acfc0;--tint:#253e37;--gate:#edb98d;--gate-bg:#423327}.route button[aria-pressed="true"]{color:#172322}}
+@media(max-width:780px){header,main,footer{padding-left:20px;padding-right:20px}header{padding-top:36px}.hero,.columns,.two-maps,.doc-explorer,.skill-grid{grid-template-columns:1fr;gap:20px}.route{grid-template-columns:repeat(2,1fr)}.gate-row,.lanes{grid-template-columns:1fr}.section-head{display:block}.stage{padding:20px}.stage-title{display:block}.gate-badge{display:inline-block;margin-top:8px}section{padding:32px 0}.hero{gap:24px}}
+@media print{body{background:white;color:black}header,main,footer{max-width:none}.route,.pager,.choices,.top{display:none}.stage,.map,.gate-card,.lane,.skill-group{break-inside:avoid}.columns,.two-maps,.lanes{grid-template-columns:1fr}a{color:black}.doc-explorer{display:block}.stage{border:1px solid #aaa}}
+</style>
+</head>
+<body>
+<a class="skip" href="#stages">Skip to workflow</a>
+<header>
+  <p class="eyebrow">Project Definition System · Draft for review · 01 Oct 2026</p>
+  <div class="hero">
+    <div><h1>From an idea<br>to work you can trust.</h1><p class="intro">A manual route through decisions, scope, behavior, documentation, and GitHub Issues. Approve the next delivery slice while the following slice becomes clearer.</p></div>
+    <div class="aside-note"><strong>What “ready” means</strong><p>An implementer can proceed without inventing material behavior, boundaries, contracts, or acceptance conditions. The approved packet says what they may decide themselves.</p><p>Review this model one stage at a time. The small pilot project follows after the overall design looks good.</p></div>
+  </div>
+  <nav class="top" aria-label="Page sections"><a href="#stages">Stage walkthrough</a><a href="#gates">Four gates</a><a href="#maps">Two maps</a><a href="#documents">Choose documents</a><a href="#rolling">Rolling slices</a><a href="#skills">Manual skills</a><a href="#handoff">Handoff</a></nav>
+</header>
+<main>
+<section id="stages" aria-labelledby="stages-title">
+  <div class="section-head"><h2 id="stages-title">Walk the route.</h2><p>Choose a stage. Read its input, decisions, outputs, and exit condition before moving to the next.</p></div>
+  <div class="route" id="stage-nav" aria-label="Select planning stage"></div>
+  <article class="stage" id="stage-panel" aria-labelledby="stage-title" tabindex="-1">
+    <div class="stage-title"><div><span class="stage-number" id="stage-number"></span><h3 id="stage-title">Capture the idea</h3></div><span class="gate-badge" id="stage-gate" hidden></span></div>
+    <p id="stage-purpose"></p>
+    <div class="stage-block"><h4>Bring into this stage</h4><p id="stage-input"></p></div>
+    <div class="columns"><div class="stage-block"><h4>Human decisions</h4><ul id="stage-human"></ul></div><div class="stage-block"><h4>Agent work</h4><ul id="stage-agent"></ul></div></div>
+    <div class="columns"><div class="stage-block"><h4>Output</h4><p id="stage-output"></p></div><div class="stage-block"><h4>Proposed manual skill</h4><code id="stage-skill"></code><p class="muted" id="stage-question"></p></div></div>
+    <div class="exit"><p><strong>Exit condition:</strong> <span id="stage-exit"></span></p><p><strong>Then:</strong> <span id="stage-next"></span></p><a href="WORKFLOW.md">Read the full operating contract</a></div>
+  </article>
+  <div class="pager"><button type="button" id="previous">← Previous stage</button><span id="stage-position" aria-live="polite"></span><button type="button" id="next">Next stage →</button></div>
+  <noscript><p>The interactive stage view needs JavaScript. The complete sequence and every stage contract are available in <a href="WORKFLOW.md">WORKFLOW.md</a>.</p></noscript>
+</section>
+<section id="gates" aria-labelledby="gates-title">
+  <div class="section-head"><h2 id="gates-title">Four commitments.</h2><p>Each gate is a recorded human judgment against named evidence and revisions. Filling a template does not produce approval.</p></div>
+  <div class="gate-row">
+    <article class="gate-card"><small>After Frame</small><h3>01 · Intent</h3><p>Is this problem and outcome worth defining? Authorizes discovery and shaping.</p></article>
+    <article class="gate-card"><small>After Select</small><h3>02 · Slice</h3><p>Is this the next bounded vertical slice? Authorizes its detailed definition.</p></article>
+    <article class="gate-card"><small>After Define</small><h3>03 · Definition</h3><p>Is material behavior settled? Authorizes candidate implementation decomposition.</p></article>
+    <article class="gate-card"><small>After Readiness</small><h3>04 · Readiness</h3><p>Is this exact issue packet implementable? Authorizes publication and handoff.</p></article>
+  </div>
+  <div class="annotation"><p><strong>Possible results:</strong> pass · revise · spike · defer · stop</p><p>A failed gate stops downstream work for the affected slice. A spike is a bounded learning question with an exit condition. Unrelated approved work can continue.</p></div>
+</section>
+<section id="maps" aria-labelledby="maps-title">
+  <div class="section-head"><h2 id="maps-title">Questions and delivery.</h2><p>Use parentage to show what belongs within what. Use blockers to show what must happen first.</p></div>
+  <div class="two-maps">
+    <article class="map"><p class="label">Decision Map · Wayfinder</p><h3>What must become clear?</h3><div class="tree">Destination: define the selected slice
+├─ Research question
+├─ Behavioral decision
+├─ Prototype discussion
+└─ Prerequisite learning work</div><p>Precise questions become tickets. Vague in-scope territory stays visible as fog. Resolutions update the authoritative definition.</p><p><strong>Native Wayfinder convention:</strong> map → direct decision tickets. Scope the destination to the commitment you are trying to reach.</p></article>
+    <article class="map"><p class="label">Delivery Map · GitHub Issues</p><h3>What work serves the outcome?</h3><div class="tree">Project
+└─ Delivery Slice [outcome attached]
+   └─ Capability
+      └─ Feature
+         └─ Story
+            └─ Task
+               └─ Subtask</div><p>Skip unhelpful levels. A Story can be executable; a Story grouping Tasks can be a container. Set that role explicitly.</p><p><strong>Native GitHub limits:</strong> eight nested sub-issue levels and 100 children per parent. Deeper conceptual branches use visible linked continuation roots.</p></article>
+  </div>
+  <div class="trace" aria-label="Traceability chain"><span>Outcome</span><b>→</b><span>Scope node</span><b>→</b><span>Rule / contract</span><b>→</b><span>Acceptance example</span><b>→</b><span>Execution issue</span></div>
+  <p>Follow the links backward to explain an issue; follow them forward to find affected work when a decision changes. Repository documents own definitions. GitHub owns live work state and native relationships.</p>
+  <p class="muted">Platform facts: <a href="https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/adding-sub-issues">GitHub sub-issues</a> · <a href="https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/creating-issue-dependencies">blocking relationships</a>. Continuation edges are explicit conceptual links, with a repository record of the full path.</p>
+</section>
+<section id="documents" aria-labelledby="documents-title">
+  <div class="section-head"><h2 id="documents-title">Let the slice choose the docs.</h2><p>Document selection is a stage. Explore which change dimensions would suggest additional evidence.</p></div>
+  <div class="doc-explorer">
+    <fieldset class="choices"><legend>What does this slice change?</legend>
+      <label><input type="checkbox" data-doc="ux">User interaction, navigation, or content</label>
+      <label><input type="checkbox" data-doc="api">API, event, or external integration</label>
+      <label><input type="checkbox" data-doc="data">Persistent data, ownership, or migration</label>
+      <label><input type="checkbox" data-doc="architecture">Consequential architecture or infrastructure</label>
+      <label><input type="checkbox" data-doc="security">Permissions, sensitive data, or trust boundaries</label>
+      <label><input type="checkbox" data-doc="quality">Performance, reliability, or accessibility</label>
+      <label><input type="checkbox" data-doc="operations">Deployment, compatibility, rollback, or support</label>
+      <label><input type="checkbox" data-doc="evidence">Product value or usability is uncertain</label>
+      <label><input type="checkbox" data-doc="measurement">Outcome measurement or user instructions</label>
+    </fieldset>
+    <div class="doc-output"><h3>Candidate document manifest</h3><div id="doc-results" aria-live="polite"><p>Select a change dimension to see relevant artifacts.</p></div><div class="core"><strong>Always account for</strong><p>Brief · Glossary · Delivery Map · Handbook/index · Decision Map · Slice/feature behavior and examples · Readiness record</p><p>These are required information, not seven mandatory separate files. Combine content when useful. Feature specs, API examples, and design material live together unless a shared contract needs its own authoritative home.</p></div></div>
+  </div>
+  <p class="muted" style="margin-top:18px">This explorer illustrates triggers. It records no real approvals or skip decisions. A real manifest assesses every dimension and records required, existing, or skipped with reasons.</p>
+  <details><summary>How the documentation structure stays coherent</summary><p>One authoritative home per rule. Feature folders hold current behavior, examples, and applicable design/API content. Slice folders pin their approved revisions, manifest, readiness, and candidate packet. Shared contracts have one shared home. ADRs retain significant decision history. <a href="DOCUMENTATION.md">Read the documentation handbook and proposed folder tree.</a></p></details>
+</section>
+<section id="rolling" aria-labelledby="rolling-title">
+  <div class="section-head"><h2 id="rolling-title">Move the definition frontier.</h2><p>Keep the project direction visible while increasing detail only where commitment is approaching.</p></div>
+  <div class="lanes">
+    <article class="lane"><small>Slice N</small><h3>Implementing</h3><p>Approved behavior, contracts, acceptance, and issue packet. Implementation choices stay within the named discretion.</p><p><strong>Learning flows forward</strong> into the next slice.</p></article>
+    <article class="lane"><small>Slice N+1</small><h3>Shaping and defining</h3><p>Active questions, research, macro solution, selected scope, and necessary documents. Gates establish its next baseline.</p><p><strong>One main future slice</strong> keeps human decision work manageable.</p></article>
+    <article class="lane"><small>Later slices</small><h3>Direction and fog</h3><p>Potential outcomes, rough boundaries, dependencies, and honest uncertainty. Detail grows as evidence becomes available.</p><p><strong>No premature execution backlog.</strong></p></article>
+  </div>
+  <div class="loop"><h3>When approved behavior changes</h3><p>Record trigger → resolve the question → mark affected definitions/issues stale → update evidence → recompute coverage and dependencies → repeat relevant gates → resume authorized work.</p><p>A future slice can propose a new contract. Changing the baseline of running work requires impact review and controlled reopening. Marking an issue stale must be accompanied by stopping/blocking its actual implementation consumer.</p></div>
+</section>
+<section id="skills" aria-labelledby="skills-title">
+  <div class="section-head"><h2 id="skills-title">A human steers each session.</h2><p>Proposed skills have explicit inputs, outputs, completion criteria, and return paths. They are specifications in this draft.</p></div>
+  <div class="skill-grid">
+    <article class="skill-group"><h3>Coordinator</h3><p><code>define-next</code> reads the current brief, slice, gate, manifest, and map index. It explains the next valid action and prepares the invocation.</p><p>You manually start the stage skill. The coordinator preserves existing approvals and identifies stale prerequisites.</p></article>
+    <article class="skill-group"><h3>Definition sessions</h3><ol><li><code>define-capture</code> / <code>define-frame</code></li><li><code>define-wayfinder-chart</code> / <code>define-domain-model</code></li><li><code>define-journey-and-slice</code></li><li><code>define-document-manifest</code></li><li><code>define-slice-definition</code></li></ol></article>
+    <article class="skill-group"><h3>Issue preparation and handoff</h3><ol><li><code>define-delivery-map</code></li><li><code>define-readiness-review</code></li><li><code>define-github-publish</code></li></ol><p>Definition approval → draft packet → Readiness approval → published execution issues.</p></article>
+    <article class="skill-group"><h3>Continuity and recovery</h3><p><code>define-change-recovery</code> follows the affected links and restores a current approval. Every session ends with changed artifacts, settled decisions, blockers/fog, gate status, and the next invocation.</p><p><a href="SKILL-SPECS.md">Read every skill contract</a> · <a href="TEMPLATES.md">Inspect the record templates</a></p></article>
+  </div>
+</section>
+<section id="handoff" aria-labelledby="handoff-title">
+  <div class="section-head"><h2 id="handoff-title">What reaches implementation?</h2><p>A bounded issue set plus accessible definitions and verification guidance.</p></div>
+  <div class="table-wrap"><table><thead><tr><th>Packet item</th><th>What the implementer can understand</th></tr></thead><tbody>
+    <tr><td>Outcome and scope</td><td>Why this slice exists, what is included, and where it stops.</td></tr>
+    <tr><td>Approved definitions</td><td>Rules, examples, designs, contracts, data, and relevant constraints at named revisions.</td></tr>
+    <tr><td>Issue hierarchy</td><td>What each unit contributes; container versus executable role; parent and source links.</td></tr>
+    <tr><td>Dependencies</td><td>Real blockers, shared-resource coordination, and available execution frontier.</td></tr>
+    <tr><td>Acceptance and proof</td><td>Observable completion, checks, and slice integration acceptance.</td></tr>
+    <tr><td>Discretion and recovery</td><td>What can be decided locally, and which material discoveries reopen approval.</td></tr>
+  </tbody></table></div>
+  <details><summary>How partial GitHub publication resumes</summary><p>Each approved unit has a stable work ID. The publisher reads existing issues, records each resulting URL immediately, and wires relationships in a second pass. On interruption it reconciles that ledger against GitHub, then reads back the entire approved set. This prevents a retry from blindly duplicating issues.</p></details>
+  <details><summary>Which decisions belong to the human?</summary><p>Outcome choice, appetite, evidence acceptance, business/legal judgment, residual risk acceptance, and all four baselines. AI researches facts, interviews, challenges omissions, drafts and cross-checks. Unsupported AI conclusions remain assumptions.</p></details>
+  <details><summary>How small changes can use a lighter path</summary><p>Reuse applicable approved intent and definitions. Assess the change dimensions, specify focused behavior/examples, draft the issue, and combine Definition/Readiness review when appropriate. New material uncertainty returns to the broader route.</p></details>
+  <div class="annotation"><p><strong>Review next: Capture and Frame.</strong> Check whether these stages would take your raw idea to a useful brief and Intent decision. Then inspect the later stages in order before a small pilot.</p></div>
+</section>
+</main>
+<footer><div class="footer-links"><a href="README.md">Packet index</a><a href="CONTEXT.md">Glossary</a><a href="WORKFLOW.md">Operating workflow</a><a href="DOCUMENTATION.md">Documentation handbook</a><a href="SOURCES.md">Research and sources</a></div><p>Independent upstream research. The implementation handoff can be consumed by Sandcastle or another execution system. Reviewed primary-source principles inform this synthesis; the proposed workflow has not yet been pilot-validated.</p></footer>
+<script>
+(() => {
+  'use strict';
+  const stages = [
+    {name:'Capture the idea',gate:'',purpose:'Preserve what arrived and identify what it actually claims.',input:'Raw idea, PRD, notes, conversations, existing documents, or a feature request.',human:['Correct the intent if the normalized request misses it.','Identify the origin of material that is not otherwise available.'],agent:['Link all supplied inputs and preserve provenance.','Separate observed facts, assumptions, proposed solutions, and contradictions.','Classify new project, substantial feature, or bounded change.'],output:'Intake in the project brief, source links, and questions for framing.',skill:'define-capture',question:'“Capture this idea and make the assumptions visible.”',exit:'All inputs are represented or linked without invented certainty.',next:'Frame the problem, outcome, constraints, and appetite.'},
+    {name:'Frame the project',gate:'Intent Gate',purpose:'Agree on the problem worth pursuing and what success would mean.',input:'Intake, available evidence, current situation, and known constraints.',human:['Choose target actors, outcome, success signal, appetite, and non-goals.','Judge evidence and select pass, revise, spike, defer, or stop.'],agent:['Interview the currently answerable decisions.','Retrieve facts and expose contradictions or unsupported assumptions.','Draft the brief and assemble the Intent evidence.'],output:'Project brief plus recorded Intent Gate against a named revision.',skill:'define-frame',question:'“Frame the project and prepare the Intent decision.”',exit:'The human records a gate result; pass requires a coherent, supported intent.',next:'Chart uncertainty, model the domain, and explore the journey after pass.'},
+    {name:'Discover and model',gate:'',purpose:'Make the decision space visible and establish shared language.',input:'Accepted intent, existing knowledge, and relevant current-product evidence.',human:['Resolve product judgments through the available decision frontier.','Accept evidence and canonical term meanings.'],agent:['Chart a scoped Wayfinder destination and precise question tickets.','Keep vague uncertainty in fog and exclusions out of scope.','Build glossary, actors, states, relationships, and a broad journey.'],output:'Decision Map, glossary, domain/journey model, research and decision pointers.',skill:'define-wayfinder-chart / define-domain-model',question:'“Chart the route to a shapeable next slice.”',exit:'The whole current journey is covered broadly and consequential uncertainty is visible.',next:'Shape macro solutions and propose coherent delivery slices.'},
+    {name:'Shape delivery slices',gate:'',purpose:'Connect the main solution elements and cut coherent vertical portions.',input:'Journey, domain model, evidence, important constraints, and macro options.',human:['Compare value, risk, appetite, reversibility, and opportunity cost.','Decide which boundaries and exclusions are acceptable.'],agent:['Map alternatives and end-to-end slice candidates.','Expose prerequisites, rabbit holes, and shared contracts.','Keep distant scope at lower resolution.'],output:'Broad Delivery Map and slice candidates with outcomes and evidence.',skill:'define-journey-and-slice',question:'“Show meaningful delivery slices across the journey.”',exit:'Each candidate has an outcome, boundary, exclusions, and visible prerequisites.',next:'Select the next investment in definition.'},
+    {name:'Select the next slice',gate:'Slice Gate',purpose:'Choose the next bounded portion to define in detail.',input:'Slice candidates and evidence about value, risk, dependencies, and appetite.',human:['Select the next slice and its acceptable investment.','Approve the vertical scope and exclusions or choose a return path.'],agent:['Make the alternatives and trade-offs inspectable.','Record outcome, scope baseline, prerequisites, and selection reasons.'],output:'Selected slice brief and recorded Slice Gate.',skill:'define-journey-and-slice',question:'“Prepare the next-slice choice and its scope baseline.”',exit:'The human accepts a coherent, independently verifiable slice boundary.',next:'Assess which documents and sections this slice actually needs.'},
+    {name:'Choose the documents',gate:'',purpose:'Define the evidence and contracts required before implementation.',input:'Selected scope, existing artifacts, and actual change/risk profile.',human:['Judge document applicability, skip reasons, and necessary depth.','Assign ownership and review expectations.'],agent:['Inspect all change dimensions in the handbook.','Reuse current definitions and identify one home per contract.','Record required/existing/skipped artifacts and drafting prerequisites.'],output:'Document manifest, documentation index, and drafting order.',skill:'define-document-manifest',question:'“Assess this slice and justify its document set.”',exit:'Every dimension and mandatory information item is accounted for.',next:'Define unblocked behavior and conditional artifacts; use Wayfinder for questions.'},
+    {name:'Define the slice',gate:'Definition Gate',purpose:'Settle the material behavior and classify what remains.',input:'Scope baseline, manifest, resolved decisions, and relevant drafts.',human:['Choose consequential rules and accept applicable contracts/designs.','Approve exact definition revisions and residual risk/discretion.'],agent:['Specify actors, permissions, states, rules, examples, failures, and boundaries.','Draft applicable API, design, data, quality, and operational content.','Cross-check consistency; surface material unknowns through Wayfinder.'],output:'Approved feature/slice definitions, conditional docs, and Definition Gate.',skill:'define-slice-definition',question:'“Define this branch, then expose what is still unresolved.”',exit:'Required definitions agree; material questions are settled and the human approves.',next:'Draft meaningful implementation units and their coverage.'},
+    {name:'Map the work',gate:'',purpose:'Translate approved behavior into a coherent candidate issue packet.',input:'Definition approval and stable rules/examples at approved revisions.',human:['Review execution boundaries, ownership, and needed coordination.','Resolve any material discovery through the responsible prior stage.'],agent:['Decompose meaningful nodes and mark container/executable roles.','Map acceptance coverage and real blockers; check cycles/conflicts.','Draft bounded issues and explicit continuation edges where needed.'],output:'Candidate ticket packet, Delivery Map revision, coverage and dependency order.',skill:'define-delivery-map',question:'“Draft the issue map without introducing new product decisions.”',exit:'Every accepted example is covered and execution units are verifiable and ordered.',next:'Review the exact candidate set for implementation readiness.'},
+    {name:'Review readiness',gate:'Readiness Gate',purpose:'Approve the exact work set an implementer may take.',input:'Candidate packet, Definition approval, manifest, and source revisions.',human:['Accept residual risk, discretion, and the actual candidate set.','Choose pass, revise, spike, defer, or stop.'],agent:['Review as a fresh implementer: scope, evidence, coverage, constraints, and proof.','Check current sources, dependency order, and accessible definitions.','Identify omissions at their responsible layer.'],output:'Readiness record authorizing named revisions and a candidate packet.',skill:'define-readiness-review',question:'“Review S01 for readiness and show every blocking omission.”',exit:'Human approval and no unresolved material invention; valid execution prerequisites.',next:'Publish approved issues, verify relationships, and hand off.'},
+    {name:'Publish and hand off',gate:'',purpose:'Create the approved GitHub execution set and make it usable.',input:'Explicit repository, Readiness pass, approved packet, and issue ledger.',human:['Manually invoke publication for the intended repository and packet.','Hand authorized work to the chosen implementation consumer.'],agent:['Reconcile stable IDs, create missing issues, and retain URLs immediately.','Wire native parents and blockers; read back the whole approved set.','Verify source access and assemble the implementation handoff.'],output:'GitHub hierarchy, dependency graph, verified bindings, and handoff packet.',skill:'define-github-publish',question:'“Publish this approved packet and reconcile existing matching IDs.”',exit:'Every approved unit exists once with correct links, role, and relationships.',next:'Implement the ready frontier while shaping the next slice.'},
+    {name:'Continue rolling definition',gate:'',purpose:'Move forward using delivery evidence and recover affected changes.',input:'Current slice handoff, delivery learning, next options, and changed evidence.',human:['Steer the next slice and judge material changes to current work.','Reapprove impacted baselines after recovery.'],agent:['Update future questions and preserve current contract baselines.','Trace changed rules to stale docs/issues and the affected execution consumer.','Recompute coverage/dependencies and prepare the relevant return gate.'],output:'Next-slice frontier, updated evidence, and change/restart records where needed.',skill:'define-next / define-change-recovery',question:'“Identify the next valid definition action using current evidence.”',exit:'The next frontier is actionable; affected work has a controlled return path.',next:'Repeat the relevant stages for the next slice or impacted subtree.'}
+  ];
+  const el = id => document.getElementById(id);
+  const nav = el('stage-nav');
+  let index = 0;
+  const buttons = stages.map((stage, i) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.setAttribute('aria-controls', 'stage-panel');
+    const number = document.createElement('small'); number.textContent = String(i + 1).padStart(2, '0');
+    const name = document.createElement('span'); name.textContent = stage.name;
+    button.append(number, name);
+    if (stage.gate) { const gate = document.createElement('em'); gate.textContent = stage.gate; button.append(gate); }
+    button.addEventListener('click', () => showStage(i));
+    nav.append(button); return button;
+  });
+  function list(id, values) {
+    const target = el(id); target.replaceChildren();
+    values.forEach(value => { const li = document.createElement('li'); li.textContent = value; target.append(li); });
+  }
+  function showStage(i) {
+    index = i; const s = stages[index];
+    buttons.forEach((button, j) => button.setAttribute('aria-pressed', String(j === index)));
+    el('stage-number').textContent = 'Stage ' + String(index + 1).padStart(2, '0') + ' / 11';
+    el('stage-title').textContent = s.name;
+    el('stage-gate').hidden = !s.gate; el('stage-gate').textContent = s.gate;
+    ['purpose','input','output','skill','question','exit','next'].forEach(key => { el('stage-' + key).textContent = s[key]; });
+    list('stage-human', s.human); list('stage-agent', s.agent);
+    el('stage-position').textContent = (index + 1) + ' of 11 · ' + s.name;
+    el('previous').disabled = index === 0; el('next').disabled = index === stages.length - 1;
+  }
+  el('previous').addEventListener('click', () => { if (index > 0) { showStage(index - 1); el('stage-panel').focus({preventScroll:true}); } });
+  el('next').addEventListener('click', () => { if (index < stages.length - 1) { showStage(index + 1); el('stage-panel').focus({preventScroll:true}); } });
+  showStage(0);
+  const docTypes = {
+    ux:'UX / design: flows, interface states, feedback, accessibility, responsive expectations.',
+    api:'API / event contract: schemas, examples, authorization, errors, and applicable delivery/compatibility rules.',
+    data:'Data model / migration: ownership, invariants, lifecycle, sequencing, and recovery where needed.',
+    architecture:'Design proposal / RFC for review; ADR for the consequential accepted trade-off.',
+    security:'Security / privacy assessment of the affected permissions, data, and trust boundaries.',
+    quality:'Measurable quality requirements and proof methods for the relevant conditions.',
+    operations:'Rollout / operations / compatibility / recovery plan to the depth the change warrants.',
+    evidence:'Research / experiment plan: learning question, evidence threshold, limit, and findings.',
+    measurement:'Measurement definition and/or user-documentation plan for the actual affected outcome and operation.'
+  };
+  const choices = [...document.querySelectorAll('[data-doc]')];
+  function updateDocs() {
+    const selected = choices.filter(input => input.checked);
+    const result = el('doc-results'); result.replaceChildren();
+    if (!selected.length) { const p = document.createElement('p'); p.textContent = 'Select a change dimension to see relevant artifacts. Behavior and acceptance remain required.'; result.append(p); return; }
+    const ul = document.createElement('ul');
+    selected.forEach(input => { const li = document.createElement('li'); li.textContent = docTypes[input.dataset.doc]; ul.append(li); });
+    result.append(ul);
+  }
+  choices.forEach(input => input.addEventListener('change', updateDocs));
+})();
+</script>
+</body>
+</html>
