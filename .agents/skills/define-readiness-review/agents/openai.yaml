@@ -1,0 +1,5 @@
+interface:
+  display_name: "Define Readiness Review"
+  short_description: "Review and gate an issue packet"
+policy:
+  allow_implicit_invocation: false

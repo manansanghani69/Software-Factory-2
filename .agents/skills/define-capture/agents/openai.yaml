@@ -1,0 +1,5 @@
+interface:
+  display_name: "Define Capture"
+  short_description: "Turn raw ideas into traceable intake"
+policy:
+  allow_implicit_invocation: false

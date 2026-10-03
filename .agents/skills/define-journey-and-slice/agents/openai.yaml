@@ -1,0 +1,5 @@
+interface:
+  display_name: "Define Journey and Slice"
+  short_description: "Shape and select a delivery slice"
+policy:
+  allow_implicit_invocation: false

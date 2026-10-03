@@ -1,0 +1,5 @@
+interface:
+  display_name: "Define Next"
+  short_description: "Recommend the next definition action"
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,28 @@
+gate: intent | slice | definition | readiness
+scope: S01
+outcome: pass | revise | spike | defer | stop
+human: <name>
+date: <timestamp>
+approved_artifacts:
+  - id: FEAT-01-SPEC
+    revision: <commit-or-immutable-snapshot>
+packet: <candidate-packet-ID-and-revision-or-null>
+# Assess every item in the operating contract's applicable gate checklist.
+evidence_checklist:
+  - criterion: <gate-evidence-item>
+    evidence: <source-ID-and-revision>
+    result: checked | unchecked
+reasons: []
+residual_risks_accepted: []
+conditions_or_return_path: []
+authorized_next_work: <scope-of-authorization>
+# Use null unless outcome is spike; then all five fields are required.
+spike:
+  learning_question: <exact-question>
+  limit: <time-cost-or-scope-limit>
+  expected_evidence: <evidence-and-learning-exit-condition>
+  responsible_person: <name>
+  return_gate: intent | slice | definition | readiness
+supersedes_approval: <prior-record-or-null>
+published_issue_bindings: []
+publication_status: not-started | partial | verified

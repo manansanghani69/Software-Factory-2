@@ -1,0 +1,5 @@
+interface:
+  display_name: "Define Document Manifest"
+  short_description: "Select and justify definition artifacts"
+policy:
+  allow_implicit_invocation: false

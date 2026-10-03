@@ -1,0 +1,5 @@
+interface:
+  display_name: "Define GitHub Publish"
+  short_description: "Publish and verify an approved packet"
+policy:
+  allow_implicit_invocation: false

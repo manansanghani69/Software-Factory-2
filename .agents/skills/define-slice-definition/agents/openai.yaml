@@ -1,0 +1,5 @@
+interface:
+  display_name: "Define Slice Definition"
+  short_description: "Write behavior and acceptance definitions"
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,15 @@
+id: STORY-01
+name: <readable name>
+kind: story
+parent: FEAT-01
+delivery_slice: S01
+outcome: OUT-01
+execution_role: executable | container
+source_docs: [FEAT-01-SPEC]
+acceptance_refs: [EX-01, EX-02]
+depends_on: [TASK-PREREQUISITE]
+github_issue: null
+logical_parent: null
+# Complete root-to-node stable-ID path when this is a continuation root.
+logical_path: []
+baseline_revision: <approved-revision>

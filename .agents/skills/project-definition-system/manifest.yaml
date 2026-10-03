@@ -1,0 +1,33 @@
+package: project-definition-system
+version: 1
+invocation: manual
+skills:
+  - define-next
+  - define-capture
+  - define-frame
+  - define-wayfinder-chart
+  - define-domain-model
+  - define-journey-and-slice
+  - define-document-manifest
+  - define-slice-definition
+  - define-delivery-map
+  - define-readiness-review
+  - define-github-publish
+  - define-change-recovery
+shared_references:
+  - references/operating-contract.md
+  - references/artifact-handbook.md
+  - references/terminology.md
+  - references/integration-adapters.md
+templates:
+  - templates/project-brief.md
+  - templates/slice-definition.md
+  - templates/feature-definition.md
+  - templates/document-manifest.md
+  - templates/gate-record.yaml
+  - templates/delivery-map-record.yaml
+  - templates/execution-issue.md
+  - templates/decision-ticket.md
+  - templates/publication-ledger.md
+  - templates/session-handoff.md
+  - templates/change-impact.md

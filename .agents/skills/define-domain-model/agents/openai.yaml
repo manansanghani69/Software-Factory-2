@@ -1,0 +1,5 @@
+interface:
+  display_name: "Define Domain Model"
+  short_description: "Sharpen terms, states, and invariants"
+policy:
+  allow_implicit_invocation: false

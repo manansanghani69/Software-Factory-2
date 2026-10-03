@@ -1,0 +1,5 @@
+interface:
+  display_name: "Define Frame"
+  short_description: "Frame intent and record its gate"
+policy:
+  allow_implicit_invocation: false

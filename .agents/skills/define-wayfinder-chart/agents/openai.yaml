@@ -1,0 +1,5 @@
+interface:
+  display_name: "Define Wayfinder Chart"
+  short_description: "Chart the next decision frontier"
+policy:
+  allow_implicit_invocation: false
